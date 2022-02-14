@@ -8,7 +8,13 @@
 ;;;;   Simple Language Interpreter 1
 ;;;; ********************************************************
 
-;; Functions Here
+(define interpret
+  (lambda (filename)
+    (evaluate (parser filename))))
+
+(define evaluate
+  (lambda (tree)
+    tree))
 
 ;;;; Helper Functions--------------------------------------------------
 
