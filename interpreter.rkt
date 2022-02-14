@@ -1,5 +1,7 @@
 #lang racket
 
+(require "simpleParser.rkt")
+
 ;;;; ********************************************************
 ;;;;   Aracelli Doescher (ahd47) and Brandon Kedson (bjk118)
 ;;;;   CSDS 345
