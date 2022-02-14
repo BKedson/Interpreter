@@ -2,6 +2,6 @@
 
 A simple java-like language interpreter for CSDS 345 Programming Language Concepts.
 
-## Acknowledgements
+### Acknowledgements
 
-The files simpleParser.rkt and lex.rkt were written by Associate Professor Harold Connamacher, Case Western Reserve University
+The files simpleParser.rkt and lex.rkt were written by Associate Professor Harold Connamacher, Case Western Reserve University.
