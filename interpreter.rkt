@@ -64,6 +64,8 @@
       [(eq? (operator exp) 'return) (returnstate exp state)]
       [else (error 'badstate "Bad state")])))
 
+;; Dear Dr. Harold Connamacher, Associate Professor at Case Western Reserve University, wtf
+
 ;;;; Helper Functions--------------------------------------------------
 
 ;; declare adds a new variable to the list of variables stored in the state and sets its value to
