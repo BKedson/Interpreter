@@ -64,7 +64,12 @@
       [(eq? (operator exp) 'return) (returnstate exp state)]
       [else (error 'badstate "Bad state")])))
 
-;; Dear Dr. Harold Connamacher, Associate Professor at Case Western Reserve University, wtf
+;; Dear Dr. Harold Connamacher, Associate Professor at Case Western Reserve University,
+;; Can we use bad style for side effect challenge (it sez we canz in rubic)
+;; Return a state from Mvalue sometimes?
+;; Return a (value, state) pair from Mvalue?
+;; Find some way to not use Mvalue to find a side effect?
+;; Also, is this relevant later in life?
 
 ;;;; Helper Functions--------------------------------------------------
 
