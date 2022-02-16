@@ -49,6 +49,10 @@
       [(null? exp) exp]
       [(and (eq? (operator exp) 'var) (null? (Mvalue (rightoperand exp) state))) (declare (leftoperand exp) state)]
       [(eq? (operator exp) 'var) (assign (leftoperand exp) (Mvalue (rightoperand exp) state) (declare (leftoperand exp) state))]
+      [(eq? (operator exp) '=) (assign (leftoperand exp) (Mvalue (rightoperand exp) state) state)]
+      [(and (eq? (operator exp) 'if) (Mvalue (condition exp) state)) (Mstate (then exp) state)]
+      [(eq? (operator exp) 'if) (Mstate (else-statement exp) state)]
+      [(and (eq? (operator exp) 'while) (Mvalue (condition exp) state)) (Mstate exp (Mstate (body exp) state))]
       [else (error 'badstate "Bad state")])))
 
 ;;;; Abstractions----------------------------------------------------------
@@ -69,6 +73,30 @@
     (if (null? (cdr (cdr exp)))
         '()
         (caddr exp))))
+
+(define condition
+  (lambda (exp)
+    (if (null? (cdr exp))
+        '()
+        (cadr exp))))
+
+(define then
+  (lambda (exp)
+    (if (null? (cdr (cdr exp)))
+        '()
+        (caddr exp))))
+
+(define body
+  (lambda (exp)
+    (if (null? (cdr (cdr exp)))
+        '()
+        (caddr exp))))
+
+(define else-statement
+  (lambda (exp)
+    (if (null? (cdr (cdr (cdr exp))))
+        '()
+        (cadddr exp))))
 
 (define vars-list
   (lambda (state)
