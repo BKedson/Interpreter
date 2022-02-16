@@ -8,21 +8,26 @@
 ;;;;   Simple Language Interpreter 1
 ;;;; ********************************************************
 
+; add comments
 (define interpret
   (lambda (filename)
-    (evaluate (parser filename))))
+    (evaluate (parser filename) '(() ()))))
 
 (define evaluate
   (lambda (tree state)
-    (cond
-      [(null? tree) state])))
+      (if (null? tree)
+          state
+          (evaluate (cdr tree) (Mstate (car tree) state)))))
+; do the thing whereby you only return return
+; also make return return true and false, not #t and #f
 
 ;;;; Mappings-------------------------------------------------------------
 (define Mvalue
   (lambda (exp state)
     (cond
       ((number? exp) exp)
-      ((boolean? exp) exp)
+      ((eq? 'true exp) #t)
+      ((eq? 'false exp) #f)
       ((and (not (list? exp)) (var? exp (vars-list state))) (valueof exp (vars-list state) (values-list state)))
       ((null? exp) exp)
       ((and (eq? (operator exp) '-) (null? (rightoperand exp))) (- (Mvalue (leftoperand exp))))
@@ -39,7 +44,8 @@
       ((eq? (operator exp) '>=) (>= (Mvalue (leftoperand exp) state) (Mvalue (rightoperand exp) state)))
       ((and (eq? (operator exp) '&&) (boolean? (Mvalue (leftoperand exp) state)) (boolean? (Mvalue (rightoperand exp) state))) (and (Mvalue (leftoperand exp) state) (Mvalue (rightoperand exp) state)))
       ((and (eq? (operator exp) '||) (boolean? (Mvalue (leftoperand exp) state)) (boolean? (Mvalue (rightoperand exp) state))) (or (Mvalue (leftoperand exp) state) (Mvalue (rightoperand exp) state)))
-      ((and (eq? (operator exp) '!) (boolean? (Mvalue (leftoperand) state))) (not (Mvalue (leftoperand exp) state)))
+      ((and (eq? (operator exp) '!) (boolean? (Mvalue (leftoperand exp) state))) (not (Mvalue (leftoperand exp) state)))
+      ; ((eq? (operator exp) '=) (valueof (leftoperand exp) (vars-list (Mstate exp state)) (values-list (Mstate exp state)))) ; Maybe dumb, fix tomorrow?
       (else (error 'badexp "Bad expression")))))
 
 ;; declare, assign, if, while, return
@@ -53,6 +59,8 @@
       [(and (eq? (operator exp) 'if) (Mvalue (condition exp) state)) (Mstate (then exp) state)]
       [(eq? (operator exp) 'if) (Mstate (else-statement exp) state)]
       [(and (eq? (operator exp) 'while) (Mvalue (condition exp) state)) (Mstate exp (Mstate (body exp) state))]
+      [(eq? (operator exp) 'while) state]
+      [(eq? (operator exp) 'return) (cons (vars-list state) (cons (cons (values-list state) '()) (cons (cons (Mvalue (leftoperand exp) state) '()) '())))]
       [else (error 'badstate "Bad state")])))
 
 ;;;; Abstractions----------------------------------------------------------
@@ -116,7 +124,7 @@
         state
         (cadr state))))
 
-  (define first-value
+(define first-value
   (lambda (values-list)
     (if (null? values-list)
         '()

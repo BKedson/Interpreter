@@ -1,11 +1,6 @@
-var x;
-x = 10;
-var y = 3 * x + 5;
-if (x > y)
-  x;
-else if (x * x > y)
-  x * x;
-else if (x * (x + x) > y)
-  x * (x + x);
-else
-  y - 1;
+var x = 20;
+var y = 128;
+while (x * x > 128)
+  x = x - 1;
+x = x + 1;
+return x;
