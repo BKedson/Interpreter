@@ -13,38 +13,43 @@
     (evaluate (parser filename))))
 
 (define evaluate
-  (lambda (tree)
-    tree))
+  (lambda (tree state)
+    (cond
+      [(null? tree) state])))
 
 ;;;; Mappings-------------------------------------------------------------
-(define Mint
-  (lambda (x)
+(define Mvalue
+  (lambda (exp state)
     (cond
-      ((number? x) x)
-      ((null? x) x)
-      ((and (eq? (operator x) '-) (null? (rightoperand x))) (- (Mint (leftoperand x))))
-      ((eq? (operator x) '-) (- (Mint (leftoperand x)) (Mint (rightoperand x))))
-      ((eq? (operator x) '+) (+ (Mint (leftoperand x)) (Mint (rightoperand x))))
-      ((eq? (operator x) '*) (* (Mint (leftoperand x)) (Mint (rightoperand x))))
-      ((eq? (operator x) '/) (quotient (Mint (leftoperand x)) (Mint (rightoperand x))))
-      ((eq? (operator x) '%) (remainder (Mint (leftoperand x)) (Mint (rightoperand x))))
-      (else (error 'badop "Bad operator")))))
-
-(define Mboolean
-  (lambda (exp)
-    (cond
+      ((number? exp) exp)
       ((boolean? exp) exp)
+      ((and (not (list? exp)) (var? exp (vars-list state))) (valueof exp (vars-list state) (values-list state)))
       ((null? exp) exp)
-      ((eq? (operator exp) '==) (eq? (Mint (leftoperand exp)) (Mint (rightoperand exp))))
-      ((eq? (operator exp) '!=) (not (eq? (Mint (leftoperand exp)) (Mint (rightoperand exp)))))
-      ((eq? (operator exp) '<) (< (Mint (leftoperand exp)) (Mint (rightoperand exp))))
-      ((eq? (operator exp) '>) (> (Mint (leftoperand exp)) (Mint (rightoperand exp))))
-      ((eq? (operator exp) '<=) (<= (Mint (leftoperand exp)) (Mint (rightoperand exp))))
-      ((eq? (operator exp) '>=) (>= (Mint (leftoperand exp)) (Mint (rightoperand exp))))
-      ((eq? (operator exp) '&&) (and (Mboolean (leftoperand exp)) (Mboolean (rightoperand exp))))
-      ((eq? (operator exp) '||) (or (Mboolean (leftoperand exp)) (Mboolean (rightoperand exp))))
-      ((eq? (operator exp) '!) (not (Mboolean (leftoperand exp))))
-      (else (error 'badop "Bad operator")))))
+      ((and (eq? (operator exp) '-) (null? (rightoperand exp))) (- (Mvalue (leftoperand exp))))
+      ((eq? (operator exp) '-) (- (Mvalue (leftoperand exp) state) (Mvalue (rightoperand exp) state)))
+      ((eq? (operator exp) '+) (+ (Mvalue (leftoperand exp) state) (Mvalue (rightoperand exp) state)))
+      ((eq? (operator exp) '*) (* (Mvalue (leftoperand exp) state) (Mvalue (rightoperand exp) state)))
+      ((eq? (operator exp) '/) (quotient (Mvalue (leftoperand exp) state) (Mvalue (rightoperand exp) state)))
+      ((eq? (operator exp) '%) (remainder (Mvalue (leftoperand exp) state) (Mvalue (rightoperand exp) state)))
+      ((eq? (operator exp) '==) (eq? (Mvalue (leftoperand exp) state) (Mvalue (rightoperand exp) state)))
+      ((eq? (operator exp) '!=) (not (eq? (Mvalue (leftoperand exp) state) (Mvalue (rightoperand exp) state))))
+      ((eq? (operator exp) '<) (< (Mvalue (leftoperand exp) state) (Mvalue (rightoperand exp) state)))
+      ((eq? (operator exp) '>) (> (Mvalue (leftoperand exp) state) (Mvalue (rightoperand exp) state)))
+      ((eq? (operator exp) '<=) (<= (Mvalue (leftoperand exp) state) (Mvalue (rightoperand exp) state)))
+      ((eq? (operator exp) '>=) (>= (Mvalue (leftoperand exp) state) (Mvalue (rightoperand exp) state)))
+      ((and (eq? (operator exp) '&&) (boolean? (Mvalue (leftoperand exp) state)) (boolean? (Mvalue (rightoperand exp) state))) (and (Mvalue (leftoperand exp) state) (Mvalue (rightoperand exp) state)))
+      ((and (eq? (operator exp) '||) (boolean? (Mvalue (leftoperand exp) state)) (boolean? (Mvalue (rightoperand exp) state))) (or (Mvalue (leftoperand exp) state) (Mvalue (rightoperand exp) state)))
+      ((and (eq? (operator exp) '!) (boolean? (Mvalue (leftoperand) state))) (not (Mvalue (leftoperand exp) state)))
+      (else (error 'badexp "Bad expression")))))
+
+;; declare, assign, if, while, return
+(define Mstate
+  (lambda (exp state)
+    (cond
+      [(null? exp) exp]
+      [(and (eq? (operator exp) 'var) (null? (Mvalue (rightoperand exp) state))) (declare (leftoperand exp) state)]
+      [(eq? (operator exp) 'var) (assign (leftoperand exp) (Mvalue (rightoperand exp) state) (declare (leftoperand exp) state))]
+      [else (error 'badstate "Bad state")])))
 
 ;;;; Abstractions----------------------------------------------------------
 (define operator
@@ -65,6 +70,66 @@
         '()
         (caddr exp))))
 
+(define vars-list
+  (lambda (state)
+    (if (null? state)
+        state
+        (car state))))
+
+(define first-variable
+  (lambda (vars-list)
+    (if (null? vars-list)
+        '()
+        (car vars-list))))
+
+(define values-list
+  (lambda (state)
+    (if (null? vars-list)
+        state
+        (cadr state))))
+
+  (define first-value
+  (lambda (values-list)
+    (if (null? values-list)
+        '()
+        (car values-list))))
+
 ;;;; Helper Functions--------------------------------------------------
+(define declare
+ (lambda (var state)
+   (if (var? var (vars-list state))
+     (assign var '() state)
+     (cons (cons var (vars-list state)) (cons (cons '() (values-list state)) '())))))
+
+(define assign
+  (lambda (var val state)
+    (if (var? var (vars-list state))
+        (cons (vars-list state) (cons (setvalue var val (vars-list state) (values-list state)) '()))
+        (error 'badassign "Bad assignment"))))
+      
+
+(define var?
+  (lambda (exp vars-list)
+    (cond
+      [(null? exp) (error 'badexp "Bad expression")]
+      [(null? vars-list) #f]
+      [(eq? (first-variable vars-list) exp) #t]
+      [else (var? exp (cdr vars-list))]))) ; ask Connamacher?
+
+(define valueof
+  (lambda (exp vars-list values-list)
+    (cond
+      [(null? exp) (error 'badexp "Bad expression")]
+      [(null? vars-list) (error 'novar "Variable not declared")]
+      [(eq? (first-variable vars-list) exp) (first-value values-list)]
+      [else (valueof exp (cdr vars-list) (cdr values-list))])))
+
+(define setvalue
+  (lambda (var val vars-list values-list)
+    (cond
+      [(null? var) (error 'badexp "Bad expression")]
+      [(null? vars-list) (error 'novar "Variable not declared")]
+      [(eq? (first-variable vars-list) var) (cons val (cdr values-list))]
+      [else (cons (first-value values-list) (setvalue var val (cdr vars-list) (cdr values-list)))])))
 
 ;; More functions
