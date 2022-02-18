@@ -5,15 +5,15 @@
 ;;;; ********************************************************
 ;;;;   Aracelli Doescher (ahd47) and Brandon Kedson (bjk118)
 ;;;;   CSDS 345
-;;;;   Simple Language Interpreter 1
+;;;;   Simple Language Interpreter Part 1
 ;;;; ********************************************************
 
-;; interpret reads in an input file consisting of a java-like language, parses it, and returns a specified value
+;; interpret reads in an input file consisting of a java-like language, parses it, and returns a specified return value
 (define interpret
   (lambda (filename)
     (evaluate (parser filename) (newstate))))
 
-;; evaluate generates a state based on a parse tree
+;; evaluate generates a state based on a parse tree and returns the return value
 (define evaluate
   (lambda (tree state)
       (if (null? tree)
@@ -26,50 +26,70 @@
 (define Mvalue
   (lambda (exp state)
     (cond
-      ((number? exp) exp)
-      ((eq? 'true exp) #t)
-      ((eq? 'false exp) #f)
-      ((and (not (list? exp)) (var? exp (vars-list state))) (valueof exp (vars-list state) (values-list state)))
-      ((null? exp) exp)
-      ((and (eq? (operator exp) '-) (null? (rightoperand exp))) (- (Mvalue (leftoperand exp))))
-      ((eq? (operator exp) '-) (- (Mvalue (leftoperand exp) state) (Mvalue (rightoperand exp) state)))
-      ((eq? (operator exp) '+) (+ (Mvalue (leftoperand exp) state) (Mvalue (rightoperand exp) state)))
-      ((eq? (operator exp) '*) (* (Mvalue (leftoperand exp) state) (Mvalue (rightoperand exp) state)))
-      ((eq? (operator exp) '/) (quotient (Mvalue (leftoperand exp) state) (Mvalue (rightoperand exp) state)))
-      ((eq? (operator exp) '%) (remainder (Mvalue (leftoperand exp) state) (Mvalue (rightoperand exp) state)))
-      ((eq? (operator exp) '==) (eq? (Mvalue (leftoperand exp) state) (Mvalue (rightoperand exp) state)))
-      ((eq? (operator exp) '!=) (not (eq? (Mvalue (leftoperand exp) state) (Mvalue (rightoperand exp) state))))
-      ((eq? (operator exp) '<) (< (Mvalue (leftoperand exp) state) (Mvalue (rightoperand exp) state)))
-      ((eq? (operator exp) '>) (> (Mvalue (leftoperand exp) state) (Mvalue (rightoperand exp) state)))
-      ((eq? (operator exp) '<=) (<= (Mvalue (leftoperand exp) state) (Mvalue (rightoperand exp) state)))
-      ((eq? (operator exp) '>=) (>= (Mvalue (leftoperand exp) state) (Mvalue (rightoperand exp) state)))
-      ((and (eq? (operator exp) '&&) (boolean? (Mvalue (leftoperand exp) state)) (boolean? (Mvalue (rightoperand exp) state))) (and (Mvalue (leftoperand exp) state) (Mvalue (rightoperand exp) state)))
-      ((and (eq? (operator exp) '||) (boolean? (Mvalue (leftoperand exp) state)) (boolean? (Mvalue (rightoperand exp) state))) (or (Mvalue (leftoperand exp) state) (Mvalue (rightoperand exp) state)))
-      ((and (eq? (operator exp) '!) (boolean? (Mvalue (leftoperand exp) state))) (not (Mvalue (leftoperand exp) state)))
-      ; ((eq? (operator exp) '=) (valueof (leftoperand exp) (vars-list (Mstate exp state)) (values-list (Mstate exp state)))) ; Maybe dumb, fix tomorrow?
-      (else (error 'badexp "Bad expression")))))
+      [(number? exp) exp]
+      [(eq? 'true exp) #t]
+      [(eq? 'false exp) #f]
+      [(and (not (list? exp)) (var? exp (vars-list state))) (valueof exp (vars-list state) (values-list state))] ; checks if expression is a variable
+      [(not (list? exp)) (error 'novar "Variable not declared")]
+      [(null? exp) exp]
+      [(and (eq? (operator exp) '-) (null? (rightoperand exp))) (- (Mvalue (leftoperand exp) state))] ; unary minus
+      [(eq? (operator exp) '-) (- (Mvalue (leftoperand exp) state) (Mvalue (rightoperand exp) (Mstate (leftoperand exp) state)))]
+      [(eq? (operator exp) '+) (+ (Mvalue (leftoperand exp) state) (Mvalue (rightoperand exp) (Mstate (leftoperand exp) state)))]
+      [(eq? (operator exp) '*) (* (Mvalue (leftoperand exp) state) (Mvalue (rightoperand exp) (Mstate (leftoperand exp) state)))]
+      [(eq? (operator exp) '/) (quotient (Mvalue (leftoperand exp) state) (Mvalue (rightoperand exp) (Mstate (leftoperand exp) state)))]
+      [(eq? (operator exp) '%) (remainder (Mvalue (leftoperand exp) state) (Mvalue (rightoperand exp) (Mstate (leftoperand exp) state)))]
+      [(eq? (operator exp) '==) (eq? (Mvalue (leftoperand exp) state) (Mvalue (rightoperand exp) (Mstate (leftoperand exp) state)))]
+      [(eq? (operator exp) '!=) (not (eq? (Mvalue (leftoperand exp) state) (Mvalue (rightoperand exp) (Mstate (leftoperand exp) state))))]
+      [(eq? (operator exp) '<) (< (Mvalue (leftoperand exp) state) (Mvalue (rightoperand exp) (Mstate (leftoperand exp) state)))]
+      [(eq? (operator exp) '>) (> (Mvalue (leftoperand exp) state) (Mvalue (rightoperand exp) (Mstate (leftoperand exp) state)))]
+      [(eq? (operator exp) '<=) (<= (Mvalue (leftoperand exp) state) (Mvalue (rightoperand exp) (Mstate (leftoperand exp) state)))]
+      [(eq? (operator exp) '>=) (>= (Mvalue (leftoperand exp) state) (Mvalue (rightoperand exp) (Mstate (leftoperand exp) state)))]
+      [(and (eq? (operator exp) '&&) (boolean? (Mvalue (leftoperand exp) state)) (boolean? (Mvalue (rightoperand exp) state)))
+       (and (Mvalue (leftoperand exp) state) (Mvalue (rightoperand exp) (Mstate (leftoperand exp) state)))]
+      [(and (eq? (operator exp) '||) (boolean? (Mvalue (leftoperand exp) state)) (boolean? (Mvalue (rightoperand exp) state)))
+       (or (Mvalue (leftoperand exp) state) (Mvalue (rightoperand exp) (Mstate (leftoperand exp) state)))]
+      [(and (eq? (operator exp) '!) (boolean? (Mvalue (leftoperand exp) state))) (not (Mvalue (leftoperand exp) state))]
+      [(eq? (operator exp) '=) (valueof (leftoperand exp) (vars-list (Mstate exp state)) (values-list (Mstate exp state)))] ; returns the value that was assigned to the specified variable
+      [else (error 'badexp "Bad expression")])))
 
 ;; Mstate takes an expression and modifies the state accordingly
 (define Mstate
   (lambda (exp state)
     (cond
-      [(null? exp) exp]
-      [(and (eq? (operator exp) 'var) (null? (Mvalue (val exp) state))) (declare (varname exp) state)]
-      [(eq? (operator exp) 'var) (assign (varname exp) (Mvalue (val exp) state) (declare (varname exp) state))]
-      [(eq? (operator exp) '=) (assign (varname exp) (Mvalue (val exp) state) state)]
-      [(and (eq? (operator exp) 'if) (Mvalue (condition exp) state)) (Mstate (then exp) state)]
-      [(eq? (operator exp) 'if) (Mstate (else-statement exp) state)]
-      [(and (eq? (operator exp) 'while) (Mvalue (condition exp) state)) (Mstate exp (Mstate (body exp) state))]
-      [(eq? (operator exp) 'while) state]
+      [(number? exp) state]
+      [(eq? 'true exp) state]
+      [(eq? 'false exp) state]
+      [(and (not (list? exp)) (var? exp (vars-list state))) state] ; checks if expression is a variable
+      [(not (list? exp)) (error 'novar "Variable not declared")]
+      [(null? exp) state]
+      [(and (eq? (operator exp) 'var) (null? (Mvalue (val exp) state))) (declare (varname exp) state)] ; no value specified (only varname)
+      [(eq? (operator exp) 'var) (assign (varname exp) (Mvalue (val exp) state) (declare (varname exp) (updatedstate exp state)))]
+      [(eq? (operator exp) '=) (assign (varname exp) (Mvalue (val exp) state) (updatedstate exp state))]
+      [(and (eq? (operator exp) 'if) (Mvalue (condition exp) state))
+       (Mstate (then exp) (Mstate (condition exp) state))]
+      [(eq? (operator exp) 'if) (Mstate (else-statement exp)  (Mstate (condition exp) state))]
+      [(and (eq? (operator exp) 'while) (Mvalue (condition exp) state))
+       (Mstate exp (Mstate (body exp)  (Mstate (condition exp) state)))]
+      [(eq? (operator exp) 'while)  (Mstate (condition exp)  state)]
       [(eq? (operator exp) 'return) (returnstate exp state)]
+      [(and (eq? (operator exp) '-) (null? (rightoperand exp))) (updatedstate exp state)] ; unary minus
+      [(eq? (operator exp) '-) (updatedstate exp state)]
+      [(eq? (operator exp) '+) (updatedstate exp state)]
+      [(eq? (operator exp) '*) (updatedstate exp state)]
+      [(eq? (operator exp) '/) (updatedstate exp state)]
+      [(eq? (operator exp) '%) (updatedstate exp state)]
+      [(eq? (operator exp) '==) (updatedstate exp state)]
+      [(eq? (operator exp) '!=) (updatedstate exp state)]
+      [(eq? (operator exp) '<) (updatedstate exp state)]
+      [(eq? (operator exp) '>) (updatedstate exp state)]
+      [(eq? (operator exp) '<=) (updatedstate exp state)]
+      [(eq? (operator exp) '>=) (updatedstate exp state)]
+      [(and (eq? (operator exp) '&&) (boolean? (Mvalue (leftoperand exp) state)) (boolean? (Mvalue (rightoperand exp) state)))
+       (updatedstate exp state)]
+      [(and (eq? (operator exp) '||) (boolean? (Mvalue (leftoperand exp) state)) (boolean? (Mvalue (rightoperand exp) state)))
+       (updatedstate exp state)]
+      [(and (eq? (operator exp) '!) (boolean? (Mvalue (leftoperand exp) state))) (updatedstate exp state)]
       [else (error 'badstate "Bad state")])))
-
-;; Dear Dr. Harold Connamacher, Associate Professor at Case Western Reserve University,
-;; Can we use bad style for side effect challenge (it sez we canz in rubic)
-;; Return a state from Mvalue sometimes?
-;; Return a (value, state) pair from Mvalue?
-;; Find some way to not use Mvalue to find a side effect?
-;; Also, is this relevant later in life?
 
 ;;;; Helper Functions--------------------------------------------------
 
@@ -103,7 +123,8 @@
   (lambda (exp vars-list values-list)
     (cond
       [(null? exp) (error 'badexp "Bad expression")]
-      [(null? vars-list) (error 'novar "Variable not declared")]
+      [(or (null? vars-list) (null? values-list)) (error 'novar "Variable not declared")]
+      [(and(eq? (first-variable vars-list) exp) (null? (first-value values-list))) (error 'noinit "Variable was never initialized")]
       [(eq? (first-variable vars-list) exp) (first-value values-list)]
       [else (valueof exp (restof vars-list) (restof values-list))])))
 
@@ -118,6 +139,14 @@
 
 ;;;; Abstractions----------------------------------------------------------
 
+;; updatedstate returns the modified state and accounts for side effects
+(define updatedstate
+  (lambda (exp state)
+    (cond
+      [(eq? 'var (operator exp)) (Mstate (rightoperand exp) state)]
+      [(null? (rightoperand exp)) (Mstate (leftoperand exp) state)]
+      [else (Mstate (rightoperand exp) (Mstate (leftoperand exp) state))])))
+
 ;; restof finds the rest of a given list
 (define restof
   (lambda (lis)
@@ -128,7 +157,7 @@
   (lambda (tree)
     (car tree)))
 
-;; newstate generates a new state
+;; newstate generates an initial state for the program
 (define newstate
   (lambda ()
       '(() ())))
@@ -166,7 +195,7 @@
         '()
         (cadr exp))))
 
-;; val finds the value of a variable in an assignment
+;; val finds the value expression in an assignment statement
 (define val
   (lambda (exp)
     (if (null? (cdr (cdr exp)))
@@ -184,11 +213,11 @@
 (define returnvalue
   (lambda (state)
     (cond
-      ((null? state)(error 'nullstate "The state is null"))
-      ((null? (cddr state)) '())
-      ((and (boolean? (caaddr state)) (caaddr state)) 'true)
-      ((and (boolean? (caaddr state)) (not(caaddr state))) 'false)
-      (else (caaddr state)))))
+      [(null? state)(error 'nullstate "The state is null")]
+      [(null? (cddr state)) '()]
+      [(and (boolean? (caaddr state)) (caaddr state)) 'true]
+      [(and (boolean? (caaddr state)) (not(caaddr state))) 'false]
+      [else (caaddr state)])))
 
 ;; declaredval returns the initial value of a declared var
 (define declaredval
@@ -205,7 +234,7 @@
   (lambda (var val state)
     (list (vars-list state) (setvalue var val (vars-list state) (values-list state)))))
 
-;; condition finds the conidition of an if or while expression
+;; condition finds the condition of an if or while expression
 (define condition
   (lambda (exp)
     (if (null? (cdr exp))
@@ -219,19 +248,19 @@
         '()
         (caddr exp))))
 
-;; body finds the body of the loop to be executed
-(define body
-  (lambda (exp)
-    (if (null? (cdr (cdr exp)))
-        '()
-        (caddr exp))))
-
 ;; else-statement finds the statement that is executed if the condition is false
 (define else-statement
   (lambda (exp)
     (if (null? (cdr (cdr (cdr exp))))
         '()
         (cadddr exp))))
+
+;; body finds the body of the loop to be executed
+(define body
+  (lambda (exp)
+    (if (null? (cdr (cdr exp)))
+        '()
+        (caddr exp))))
 
 ;; vars-list finds the list of variables in the state
 (define vars-list
