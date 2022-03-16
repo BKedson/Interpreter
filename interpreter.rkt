@@ -5,7 +5,7 @@
 ;;;; ********************************************************
 ;;;;   Aracelli Doescher (ahd47) and Brandon Kedson (bjk118)
 ;;;;   CSDS 345
-;;;;   Simple Language Interpreter Part 1
+;;;;   Simple Language Interpreter Part 2
 ;;;; ********************************************************
 
 ;; interpret reads in an input file consisting of a java-like language, parses it, and returns a specified return value
@@ -18,13 +18,13 @@
   (lambda (tree state)
       (if (null? tree)
           (returnvalue state)
-          (evaluate (restof tree) (Mstate (firstexp tree) state)))))
+          (evaluate (restof tree) (Mstate (firstexp tree) state (newlambda) (newlambda) (newlambda) (newlambda) (newlambda))))))
 
 ;;;; Mappings-------------------------------------------------------------
 
 ;; Mvalue takes an expression and finds the value of that expression
 (define Mvalue
-  (lambda (exp state)
+  (lambda (exp state next break continue return throw)
     (cond
       [(number? exp) exp]
       [(eq? 'true exp) #t]
@@ -32,63 +32,77 @@
       [(and (not (list? exp)) (var? exp (vars-list state))) (valueof exp (vars-list state) (values-list state))] ; checks if expression is a variable
       [(not (list? exp)) (error 'novar "Variable not declared")]
       [(null? exp) exp]
-      [(and (eq? (operator exp) '-) (null? (rightoperand exp))) (- (Mvalue (leftoperand exp) state))] ; unary minus
-      [(eq? (operator exp) '-) (- (Mvalue (leftoperand exp) state) (Mvalue (rightoperand exp) (Mstate (leftoperand exp) state)))]
-      [(eq? (operator exp) '+) (+ (Mvalue (leftoperand exp) state) (Mvalue (rightoperand exp) (Mstate (leftoperand exp) state)))]
-      [(eq? (operator exp) '*) (* (Mvalue (leftoperand exp) state) (Mvalue (rightoperand exp) (Mstate (leftoperand exp) state)))]
-      [(eq? (operator exp) '/) (quotient (Mvalue (leftoperand exp) state) (Mvalue (rightoperand exp) (Mstate (leftoperand exp) state)))]
-      [(eq? (operator exp) '%) (remainder (Mvalue (leftoperand exp) state) (Mvalue (rightoperand exp) (Mstate (leftoperand exp) state)))]
-      [(eq? (operator exp) '==) (eq? (Mvalue (leftoperand exp) state) (Mvalue (rightoperand exp) (Mstate (leftoperand exp) state)))]
-      [(eq? (operator exp) '!=) (not (eq? (Mvalue (leftoperand exp) state) (Mvalue (rightoperand exp) (Mstate (leftoperand exp) state))))]
-      [(eq? (operator exp) '<) (< (Mvalue (leftoperand exp) state) (Mvalue (rightoperand exp) (Mstate (leftoperand exp) state)))]
-      [(eq? (operator exp) '>) (> (Mvalue (leftoperand exp) state) (Mvalue (rightoperand exp) (Mstate (leftoperand exp) state)))]
-      [(eq? (operator exp) '<=) (<= (Mvalue (leftoperand exp) state) (Mvalue (rightoperand exp) (Mstate (leftoperand exp) state)))]
-      [(eq? (operator exp) '>=) (>= (Mvalue (leftoperand exp) state) (Mvalue (rightoperand exp) (Mstate (leftoperand exp) state)))]
-      [(and (eq? (operator exp) '&&) (boolean? (Mvalue (leftoperand exp) state)) (boolean? (Mvalue (rightoperand exp) state)))
-       (and (Mvalue (leftoperand exp) state) (Mvalue (rightoperand exp) (Mstate (leftoperand exp) state)))]
-      [(and (eq? (operator exp) '||) (boolean? (Mvalue (leftoperand exp) state)) (boolean? (Mvalue (rightoperand exp) state)))
-       (or (Mvalue (leftoperand exp) state) (Mvalue (rightoperand exp) (Mstate (leftoperand exp) state)))]
-      [(and (eq? (operator exp) '!) (boolean? (Mvalue (leftoperand exp) state))) (not (Mvalue (leftoperand exp) state))]
-      [(eq? (operator exp) '=) (valueof (leftoperand exp) (vars-list (Mstate exp state)) (values-list (Mstate exp state)))] ; returns the value that was assigned to the specified variable
+      [(and (eq? (operator exp) '-) (null? (rightoperand exp))) (- (Mvalue (leftoperand exp) state next break continue return throw))] ; unary minus
+      [(eq? (operator exp) '-) (- (Mvalue (leftoperand exp) state next break continue return throw) (Mvalue (rightoperand exp) (Mstate (leftoperand exp) state next break continue return throw) next break continue return throw))]
+      [(eq? (operator exp) '+) (+ (Mvalue (leftoperand exp) state next break continue return throw) (Mvalue (rightoperand exp) (Mstate (leftoperand exp) state next break continue return throw) next break continue return throw))]
+      [(eq? (operator exp) '*) (* (Mvalue (leftoperand exp) state next break continue return throw) (Mvalue (rightoperand exp) (Mstate (leftoperand exp) state next break continue return throw) next break continue return throw))]
+      [(eq? (operator exp) '/) (quotient (Mvalue (leftoperand exp) state next break continue return throw) (Mvalue (rightoperand exp) (Mstate (leftoperand exp) state next break continue return throw) next break continue return throw))]
+      [(eq? (operator exp) '%) (remainder (Mvalue (leftoperand exp) state next break continue return throw) (Mvalue (rightoperand exp) (Mstate (leftoperand exp) state next break continue return throw) next break continue return throw))]
+      [(eq? (operator exp) '==) (eq? (Mvalue (leftoperand exp) state next break continue return throw) (Mvalue (rightoperand exp) (Mstate (leftoperand exp) state next break continue return throw) next break continue return throw))]
+      [(eq? (operator exp) '!=) (not (eq? (Mvalue (leftoperand exp) state next break continue return throw) (Mvalue (rightoperand exp) (Mstate (leftoperand exp) state next break continue return throw) next break continue return throw)))]
+      [(eq? (operator exp) '<) (< (Mvalue (leftoperand exp) state next break continue return throw) (Mvalue (rightoperand exp) (Mstate (leftoperand exp) state next break continue return throw) next break continue return throw))]
+      [(eq? (operator exp) '>) (> (Mvalue (leftoperand exp) state next break continue return throw) (Mvalue (rightoperand exp) (Mstate (leftoperand exp) state next break continue return throw) next break continue return throw))]
+      [(eq? (operator exp) '<=) (<= (Mvalue (leftoperand exp) state next break continue return throw) (Mvalue (rightoperand exp) (Mstate (leftoperand exp) state next break continue return throw) next break continue return throw))]
+      [(eq? (operator exp) '>=) (>= (Mvalue (leftoperand exp) state next break continue return throw) (Mvalue (rightoperand exp) (Mstate (leftoperand exp) state next break continue return throw) next break continue return throw))]
+      [(and (eq? (operator exp) '&&) (boolean? (Mvalue (leftoperand exp) state next break continue return throw)) (boolean? (Mvalue (rightoperand exp) state next break continue return throw)))
+       (and (Mvalue (leftoperand exp) state next break continue return throw) (Mvalue (rightoperand exp) (Mstate (leftoperand exp) state next break continue return throw) next break continue return throw))]
+      [(and (eq? (operator exp) '||) (boolean? (Mvalue (leftoperand exp) state next break continue return throw)) (boolean? (Mvalue (rightoperand exp) state next break continue return throw)))
+       (or (Mvalue (leftoperand exp) state next break continue return throw) (Mvalue (rightoperand exp) (Mstate (leftoperand exp) state next break continue return throw) next break continue return throw))]
+      [(and (eq? (operator exp) '!) (boolean? (Mvalue (leftoperand exp) state next break continue return throw))) (not (Mvalue (leftoperand exp) state next break continue return throw))]
+      [(eq? (operator exp) '=) (valueof (leftoperand exp) (vars-list (Mstate exp state next break continue return throw)) (values-list (Mstate exp state next break continue return throw) next break continue return throw))] ; returns the value that was assigned to the specified variable
       [else (error 'badexp "Bad expression")])))
 
 ;; Mstate takes an expression and modifies the state accordingly
 (define Mstate
-  (lambda (exp state)
+  (lambda (exp state next break continue return throw)
     (cond
-      [(number? exp) state]
-      [(eq? 'true exp) state]
-      [(eq? 'false exp) state]
-      [(and (not (list? exp)) (var? exp (vars-list state))) state] ; checks if expression is a variable
+      [(number? exp) (return state)]
+      [(eq? 'true exp) (return state)]
+      [(eq? 'false exp) (return state)]
+      [(and (not (list? exp)) (var? exp (vars-list state))) (return state)] ; checks if expression is a variable
       [(not (list? exp)) (error 'novar "Variable not declared")]
-      [(null? exp) state]
-      [(and (eq? (operator exp) 'var) (null? (Mvalue (val exp) state))) (declare (varname exp) state)] ; no value specified (only varname)
-      [(eq? (operator exp) 'var) (assign (varname exp) (Mvalue (val exp) state) (declare (varname exp) (updatedstate exp state)))]
-      [(eq? (operator exp) '=) (assign (varname exp) (Mvalue (val exp) state) (updatedstate exp state))]
-      [(and (eq? (operator exp) 'if) (Mvalue (condition exp) state))
-       (Mstate (then exp) (Mstate (condition exp) state))]
-      [(eq? (operator exp) 'if) (Mstate (else-statement exp)  (Mstate (condition exp) state))]
-      [(and (eq? (operator exp) 'while) (Mvalue (condition exp) state))
-       (Mstate exp (Mstate (body exp)  (Mstate (condition exp) state)))]
-      [(eq? (operator exp) 'while)  (Mstate (condition exp)  state)]
-      [(eq? (operator exp) 'return) (returnstate exp state)]
+      [(null? exp) (return state)]
+      [(and (eq? (operator exp) 'var) (null? (Mvalue (val exp) state next break continue return throw))) (declare (varname exp) state)] ; no value specified (only varname)
+      [(eq? (operator exp) 'var) (assign (varname exp) (Mvalue (val exp) state next break continue return throw) (declare (varname exp) (updatedstate exp state next break continue return throw)))]
+      [(eq? (operator exp) '=) (assign (varname exp) (Mvalue (val exp) state next break continue return throw) (updatedstate exp state next break continue return throw))]
+
+      ; if
+      [(and (eq? (operator exp) 'if) (Mvalue (condition exp) state next break continue return throw))
+       (Mstate (then exp) (Mstate (condition exp) state next break continue return throw) next break continue return throw)]
+      [(eq? (operator exp) 'if) (Mstate (else-statement exp)  (Mstate (condition exp) state next break continue return throw))]
+
+      ;(Mstate exp (Mstate (body exp)  (Mstate (condition exp) state)))]
+      ; while
+      ;[(and (eq? (operator exp) 'while) (Mvalue (condition exp) state))]
+      [(eq? (operator exp) 'while)  (loop exp state next (lambda (s) (next s)) continue return throw)]
+      ;(Mstate (condition exp) state
+
+      ; break
+      [(eq? (operator exp) 'break) (break state)]
+      ; continue
+      [(eq? (operator exp) 'continue) (continue state)]
+      ; return
+      [(eq? (operator exp) 'return) (return state)]
+      ; throw
+      [(eq? (operator exp) 'throw) (throw state)]
+      ; values
       [(and (eq? (operator exp) '-) (null? (rightoperand exp))) (updatedstate exp state)] ; unary minus
-      [(eq? (operator exp) '-) (updatedstate exp state)]
-      [(eq? (operator exp) '+) (updatedstate exp state)]
-      [(eq? (operator exp) '*) (updatedstate exp state)]
-      [(eq? (operator exp) '/) (updatedstate exp state)]
-      [(eq? (operator exp) '%) (updatedstate exp state)]
-      [(eq? (operator exp) '==) (updatedstate exp state)]
-      [(eq? (operator exp) '!=) (updatedstate exp state)]
-      [(eq? (operator exp) '<) (updatedstate exp state)]
-      [(eq? (operator exp) '>) (updatedstate exp state)]
-      [(eq? (operator exp) '<=) (updatedstate exp state)]
-      [(eq? (operator exp) '>=) (updatedstate exp state)]
-      [(and (eq? (operator exp) '&&) (boolean? (Mvalue (leftoperand exp) state)) (boolean? (Mvalue (rightoperand exp) state)))
-       (updatedstate exp state)]
-      [(and (eq? (operator exp) '||) (boolean? (Mvalue (leftoperand exp) state)) (boolean? (Mvalue (rightoperand exp) state)))
-       (updatedstate exp state)]
-      [(and (eq? (operator exp) '!) (boolean? (Mvalue (leftoperand exp) state))) (updatedstate exp state)]
+      [(eq? (operator exp) '-) (updatedstate exp state next break continue return throw)]
+      [(eq? (operator exp) '+) (updatedstate exp state next break continue return throw)]
+      [(eq? (operator exp) '*) (updatedstate exp state next break continue return throw)]
+      [(eq? (operator exp) '/) (updatedstate exp state next break continue return throw)]
+      [(eq? (operator exp) '%) (updatedstate exp state next break continue return throw)]
+      [(eq? (operator exp) '==) (updatedstate exp state next break continue return throw)]
+      [(eq? (operator exp) '!=) (updatedstate exp state next break continue return throw)]
+      [(eq? (operator exp) '<) (updatedstate exp state next break continue return throw)]
+      [(eq? (operator exp) '>) (updatedstate exp state next break continue return throw)]
+      [(eq? (operator exp) '<=) (updatedstate exp state next break continue return throw)]
+      [(eq? (operator exp) '>=) (updatedstate exp state next break continue return throw)]
+      [(and (eq? (operator exp) '&&) (boolean? (Mvalue (leftoperand exp) state next break continue return throw)) (boolean? (Mvalue (rightoperand exp) state next break continue return throw)))
+       (updatedstate exp state next break continue return throw)]
+      [(and (eq? (operator exp) '||) (boolean? (Mvalue (leftoperand exp) state next break continue return throw)) (boolean? (Mvalue (rightoperand exp) state next break continue return throw)))
+       (updatedstate exp state next break continue return throw)]
+      [(and (eq? (operator exp) '!) (boolean? (Mvalue (leftoperand exp) state next break continue return throw))) (updatedstate exp state next break continue return throw)]
       [else (error 'badstate "Bad state")])))
 
 ;;;; Helper Functions--------------------------------------------------
@@ -139,13 +153,25 @@
 
 ;;;; Abstractions----------------------------------------------------------
 
+;; newlambda returns a new function
+(define newlambda
+  (lambda ()
+    (lambda (s) s)))
+
+;; loop does something
+(define loop
+  (lambda (exp state next break continue return throw)
+    (if (Mvalue (condition exp) state next break continue return throw)
+        (Mstate (body exp) state (lambda (s) (Mstate exp s next break continue return throw)) break continue return throw)
+        (next state))))
+
 ;; updatedstate returns the modified state and accounts for side effects
 (define updatedstate
-  (lambda (exp state)
+  (lambda (exp state next break continue return throw)
     (cond
-      [(eq? 'var (operator exp)) (Mstate (rightoperand exp) state)]
-      [(null? (rightoperand exp)) (Mstate (leftoperand exp) state)]
-      [else (Mstate (rightoperand exp) (Mstate (leftoperand exp) state))])))
+      [(eq? 'var (operator exp)) (Mstate (rightoperand exp) state next break continue return throw)]
+      [(null? (rightoperand exp)) (Mstate (leftoperand exp) state next break continue return throw)]
+      [else (Mstate (rightoperand exp) (Mstate (leftoperand exp) state next break continue return throw) next break continue return throw)])))
 
 ;; restof finds the rest of a given list
 (define restof
@@ -164,8 +190,8 @@
 
 ;; returnstate returns the state with an added return component
 (define returnstate
-  (lambda (exp state)
-    (cons (vars-list state) (cons (cons (values-list state) '()) (cons (cons (Mvalue (returnexp exp) state) '()) '())))))
+  (lambda (exp state next break continue return throw)
+    (cons (vars-list state) (cons (cons (values-list state) '()) (cons (cons (Mvalue (returnexp exp) state next break continue return throw) '()) '())))))
 
 ;; operator finds the operator of an expression
 (define operator

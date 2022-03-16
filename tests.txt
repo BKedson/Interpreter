@@ -1,3 +1,5 @@
 var x;
-var y;
-x = y = 10;
+x = 5;
+while (x > 2)
+	break;
+return x;
