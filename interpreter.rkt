@@ -11,14 +11,19 @@
 ;; interpret reads in an input file consisting of a java-like language, parses it, and returns a specified return value
 (define interpret
   (lambda (filename)
-    (evaluate (parser filename) (newstate))))
+    (evaluate (parser filename)
+              (newstate)
+              (newbreaklambda)
+              (newcontinuelambda)
+              (newreturnlambda)
+              (newthrowlambda))))
 
 ;; evaluate generates a state based on a parse tree and returns the return value
 (define evaluate
-  (lambda (tree state)
+  (lambda (tree state break continue return throw)
       (if (null? tree)
-          (returnvalue state)
-          (evaluate (restof tree) (Mstate (firstexp tree) state (newlambda) (newlambda) (newlambda) (newlambda) (newlambda))))))
+          '() ; (returnvalue state)
+          (Mstate (firstexp tree) state (newnextlambda tree break continue return throw) break continue return throw)))) ; (evaluate (restof tree) 
 
 ;;;; Mappings-------------------------------------------------------------
 
@@ -56,20 +61,20 @@
 (define Mstate
   (lambda (exp state next break continue return throw)
     (cond
-      [(number? exp) (return state)]
-      [(eq? 'true exp) (return state)]
-      [(eq? 'false exp) (return state)]
-      [(and (not (list? exp)) (var? exp (vars-list state))) (return state)] ; checks if expression is a variable
+      [(number? exp) state] ; return? next? what?
+      [(eq? 'true exp) state]
+      [(eq? 'false exp) state]
+      [(and (not (list? exp)) (var? exp (vars-list state))) state] ; checks if expression is a variable
       [(not (list? exp)) (error 'novar "Variable not declared")]
-      [(null? exp) (return state)]
-      [(and (eq? (operator exp) 'var) (null? (Mvalue (val exp) state next break continue return throw))) (declare (varname exp) state)] ; no value specified (only varname)
-      [(eq? (operator exp) 'var) (assign (varname exp) (Mvalue (val exp) state next break continue return throw) (declare (varname exp) (updatedstate exp state next break continue return throw)))]
-      [(eq? (operator exp) '=) (assign (varname exp) (Mvalue (val exp) state next break continue return throw) (updatedstate exp state next break continue return throw))]
+      [(null? exp) (next state)]
+      [(and (eq? (operator exp) 'var) (null? (Mvalue (val exp) state next break continue return throw))) (next (declare (varname exp) state))] ; no value specified (only varname)
+      [(eq? (operator exp) 'var) (next (assign (varname exp) (Mvalue (val exp) state next break continue return throw) (declare (varname exp) (updatedstate exp state next break continue return throw))))]
+      [(eq? (operator exp) '=) (next (assign (varname exp) (Mvalue (val exp) state next break continue return throw) (updatedstate exp state next break continue return throw)))]
 
       ; if
       [(and (eq? (operator exp) 'if) (Mvalue (condition exp) state next break continue return throw))
        (Mstate (then exp) (Mstate (condition exp) state next break continue return throw) next break continue return throw)]
-      [(eq? (operator exp) 'if) (Mstate (else-statement exp)  (Mstate (condition exp) state next break continue return throw))]
+      [(eq? (operator exp) 'if) (Mstate (else-statement exp)  (Mstate (condition exp) state next break continue return throw) next break continue return throw)]
 
       ;(Mstate exp (Mstate (body exp)  (Mstate (condition exp) state)))]
       ; while
@@ -82,11 +87,11 @@
       ; continue
       [(eq? (operator exp) 'continue) (continue state)]
       ; return
-      [(eq? (operator exp) 'return) (return state)]
+      [(eq? (operator exp) 'return) (return (returnvalue (returnexp exp) state next break continue return throw))]
       ; throw
       [(eq? (operator exp) 'throw) (throw state)]
       ; values
-      [(and (eq? (operator exp) '-) (null? (rightoperand exp))) (updatedstate exp state)] ; unary minus
+      [(and (eq? (operator exp) '-) (null? (rightoperand exp))) (updatedstate exp state next break continue return throw)] ; unary minus
       [(eq? (operator exp) '-) (updatedstate exp state next break continue return throw)]
       [(eq? (operator exp) '+) (updatedstate exp state next break continue return throw)]
       [(eq? (operator exp) '*) (updatedstate exp state next break continue return throw)]
@@ -154,8 +159,31 @@
 ;;;; Abstractions----------------------------------------------------------
 
 ;; newlambda returns a new function
-(define newlambda
+(define newnextlambda
+  (lambda (tree break continue return throw)
+    (lambda (s)
+      (if (null? (restof tree))
+                    '()
+                    (Mstate (car (restof tree)) s (newnextlambda (cdr tree) break continue return throw) break continue return throw)))))
+
+(define newbreaklambda
   (lambda ()
+    (lambda (s) s)))
+
+(define newcontinuelambda
+  (lambda ()
+    (lambda (s) s)))
+
+(define newreturnlambda
+  (lambda ()
+    (lambda (v)
+      (cond
+        [(and (boolean? v) v) 'true]
+        [(and (boolean? v) (not v)) 'false]
+        [else v]))))
+
+(define newthrowlambda
+  (lambda  ()
     (lambda (s) s)))
 
 ;; loop does something
@@ -169,9 +197,9 @@
 (define updatedstate
   (lambda (exp state next break continue return throw)
     (cond
-      [(eq? 'var (operator exp)) (Mstate (rightoperand exp) state next break continue return throw)]
+      [(or (eq? 'var (operator exp)) (eq? '= (operator exp))) (Mstate (rightoperand exp) state next break continue return throw)]
       [(null? (rightoperand exp)) (Mstate (leftoperand exp) state next break continue return throw)]
-      [else (Mstate (rightoperand exp) (Mstate (leftoperand exp) state next break continue return throw) next break continue return throw)])))
+      [else (Mstate (rightoperand exp) state (lambda (s) (Mstate (leftoperand exp) s next break continue return throw)) break continue return throw)])))
 
 ;; restof finds the rest of a given list
 (define restof
@@ -237,13 +265,8 @@
 
 ;; returnvalue finds the return component of the state
 (define returnvalue
-  (lambda (state)
-    (cond
-      [(null? state)(error 'nullstate "The state is null")]
-      [(null? (cddr state)) '()]
-      [(and (boolean? (caaddr state)) (caaddr state)) 'true]
-      [(and (boolean? (caaddr state)) (not(caaddr state))) 'false]
-      [else (caaddr state)])))
+  (lambda (exp state next break continue return throw)
+    (Mvalue exp state next break continue return throw)))
 
 ;; declaredval returns the initial value of a declared var
 (define declaredval
