@@ -1,14 +1,11 @@
-var a = 31160;
-var b = 1476;
-if (a < b) {
-  var temp = a;
-  a = b;
-  b = temp;
+var x = 0;
+var result = 0;
+
+while (x < 10) {
+  if (result > 15) {
+    return result;
+  }
+  result = result + x;
+  x = x + 1;
 }
-var r = a % b;
-while (r != 0) {
-  a = b;
-  b = r;
-  r = a % b;
-}
-return b;
+return result;

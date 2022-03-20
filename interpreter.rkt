@@ -15,15 +15,16 @@
               (newstate)
               (newbreaklambda)
               (newcontinuelambda)
-              (newreturnlambda)
+              (newreturnlambda (newstate) (newthrowlambda))
               (newthrowlambda))))
 
 ;; evaluate generates a state based on a parse tree and returns the return value
 (define evaluate
   (lambda (tree state break continue return throw)
-      (if (null? tree)
-          (returnvalue state)
-          (Mstate (firstexp tree) state (newnextlambda tree break continue return throw) break continue return throw)))) ; (evaluate (restof tree) 
+      (cond
+        [(null? tree) '()]
+        [(not (null? (returnvalue state))) (returnvalue state)]
+        [ else (Mstate (firstexp tree) state (newnextlambda tree break continue return throw) break continue return throw)]))) ; (evaluate (restof tree) 
 
 ;;;; Mappings-------------------------------------------------------------
 
@@ -61,7 +62,7 @@
 (define Mstate
   (lambda (exp state next break continue return throw)
     (cond
-      [(not (null? (returnvalue state))) (return (returnstate (returnexp exp) state next break continue return throw))]
+      ;[(not (null? (returnvalue state))) (return (returnstate (returnexp exp) state next break continue return throw))]
       [(number? exp) state] ; return? next? what?
       [(eq? 'true exp) state]
       [(eq? 'false exp) state]
@@ -73,7 +74,7 @@
       [(eq? (operator exp) '=) (next (assign (varname exp) (Mvalue (val exp) state next break continue return throw) (updatedstate exp state next break continue return throw)))]
       ; block
       ; [(and (eq? (operator exp) 'begin) (list? (evaluate (restof exp) (addnewlayer state) break continue return throw))) (next (cdr (evaluate (restof exp) (addnewlayer state) break continue return throw)))]
-      [(eq? (operator exp) 'begin) (next (Mstate (firstexp (restof exp)) (addnewlayer state) (newnextlambda (restof exp) break continue return throw) break continue return throw))]
+      [(eq? (operator exp) 'begin) (next (Mstate (firstexp (restof exp)) (addnewlayer state) (newnextlambda (restof exp) break continue return throw) break continue (newblockreturnlambda state) throw))]
       ; if
       [(and (eq? (operator exp) 'if) (Mvalue (condition exp) state next break continue return throw))
        (Mstate (then exp) (Mstate (condition exp) state next break continue return throw) next break continue return throw)]
@@ -91,7 +92,7 @@
       ; continue
       [(eq? (operator exp) 'continue) (continue (cdr state))]
       ; return
-      [(eq? (operator exp) 'return) (return (returnstate (returnexp exp) state next break continue return throw))]
+      [(eq? (operator exp) 'return) (return (Mvalue (returnexp exp) state next break continue return throw))]
       ; throw
       [(eq? (operator exp) 'throw) (throw state)]
       ; values
@@ -177,7 +178,7 @@
     (lambda (s)
       (if (null? (restof tree))
                     s
-                    (Mstate (car (restof tree)) s (newnextlambda (cdr tree) break continue return throw) break continue return throw)))))
+                    (Mstate (car (restof tree)) s (newnextlambda (cdr tree) break continue (newreturnlambda s throw) throw) break continue (newreturnlambda s throw) throw)))))
 
 (define newbreaklambda
   (lambda ()
@@ -188,12 +189,13 @@
     (lambda (s) (error 'noloop "Break cannot be run outside of a loop"))))
 
 (define newreturnlambda
-  (lambda ()
+  (lambda (state throw)
     (lambda (v)
-      (cond
-        [(and (boolean? (returnvalue v)) (returnvalue v)) 'true]
-        [(and (boolean? (returnvalue v)) (not (returnvalue v))) 'false]
-        [else v]))))
+      (returnstate v state (badreturnlambda) (badreturnlambda) (badreturnlambda) (badreturnlambda) throw))))
+
+(define badreturnlambda
+ (lambda ()
+   (lambda (s) (error 'badreturn "Bad return"))))
 
 (define newthrowlambda
   (lambda  ()
@@ -208,6 +210,11 @@
   (lambda (next)
     (lambda (s)
       (next (cdr s)))))
+
+(define newblockreturnlambda
+  (lambda (state)
+    (lambda (v)
+      (Mstate '(return v) state (newnextlambda '((return v))) (newbreaklambda) (newcontinuelambda) (newreturnlambda) (newthrowlambda)))))
 
 (define currentlayer
   (lambda (state)
@@ -250,8 +257,8 @@
 
 ;; returnstate returns the state with an added return component
 (define returnstate
-  (lambda (exp state next break continue return throw)
-    (cons state (cons (Mvalue exp state next break continue return throw) '()))))
+  (lambda (v state next break continue return throw)
+    (cons state (cons v '()))))
 
 ;; operator finds the operator of an expression
 (define operator
