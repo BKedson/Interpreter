@@ -22,7 +22,7 @@
 (define evaluate
   (lambda (tree state break continue return throw)
       (if (null? tree)
-          state ; (returnvalue state)
+          (returnvalue state)
           (Mstate (firstexp tree) state (newnextlambda tree break continue return throw) break continue return throw)))) ; (evaluate (restof tree) 
 
 ;;;; Mappings-------------------------------------------------------------
@@ -61,6 +61,7 @@
 (define Mstate
   (lambda (exp state next break continue return throw)
     (cond
+      [(not (null? (returnvalue state))) (return (returnstate (returnexp exp) state next break continue return throw))]
       [(number? exp) state] ; return? next? what?
       [(eq? 'true exp) state]
       [(eq? 'false exp) state]
@@ -72,10 +73,11 @@
       [(eq? (operator exp) '=) (next (assign (varname exp) (Mvalue (val exp) state next break continue return throw) (updatedstate exp state next break continue return throw)))]
       ; block
       ; [(and (eq? (operator exp) 'begin) (list? (evaluate (restof exp) (addnewlayer state) break continue return throw))) (next (cdr (evaluate (restof exp) (addnewlayer state) break continue return throw)))]
-      [(eq? (operator exp) 'begin) (return (evaluate (restof exp) (addnewlayer state) break continue return throw))]
+      [(eq? (operator exp) 'begin) (next (Mstate (firstexp (restof exp)) (addnewlayer state) (newnextlambda (restof exp) break continue return throw) break continue return throw))]
       ; if
       [(and (eq? (operator exp) 'if) (Mvalue (condition exp) state next break continue return throw))
        (Mstate (then exp) (Mstate (condition exp) state next break continue return throw) next break continue return throw)]
+      [(and (eq? (operator exp) 'if) (null? (else-statement exp))) (next state)]
       [(eq? (operator exp) 'if) (Mstate (else-statement exp)  (Mstate (condition exp) state next break continue return throw) next break continue return throw)]
 
       ;(Mstate exp (Mstate (body exp)  (Mstate (condition exp) state)))]
@@ -85,11 +87,11 @@
       ;(Mstate (condition exp) state
 
       ; break
-      [(eq? (operator exp) 'break) (break state)]
+      [(eq? (operator exp) 'break) (break (cdr state))]
       ; continue
       [(eq? (operator exp) 'continue) (continue (cdr state))]
       ; return
-      [(eq? (operator exp) 'return) (return (returnvalue (returnexp exp) state next break continue return throw))]
+      [(eq? (operator exp) 'return) (return (returnstate (returnexp exp) state next break continue return throw))]
       ; throw
       [(eq? (operator exp) 'throw) (throw state)]
       ; values
@@ -179,18 +181,18 @@
 
 (define newbreaklambda
   (lambda ()
-    (lambda (s) s)))
+    (lambda (s) (error 'noloop "Break cannot be run outside of a loop"))))
 
 (define newcontinuelambda
   (lambda ()
-    (lambda (s) s)))
+    (lambda (s) (error 'noloop "Break cannot be run outside of a loop"))))
 
 (define newreturnlambda
   (lambda ()
     (lambda (v)
       (cond
-        [(and (boolean? v) v) 'true]
-        [(and (boolean? v) (not v)) 'false]
+        [(and (boolean? (returnvalue v)) (returnvalue v)) 'true]
+        [(and (boolean? (returnvalue v)) (not (returnvalue v))) 'false]
         [else v]))))
 
 (define newthrowlambda
@@ -220,7 +222,7 @@
 (define loop
   (lambda (exp state next break continue return throw)
     (if (Mvalue (condition exp) state next break continue return throw)
-        (Mstate (body exp) state (lambda (s) (Mstate exp s next break continue return throw)) break continue return throw)
+        (Mstate (body exp) state (lambda (s) (Mstate exp (cdr s) next break continue return throw)) break continue return throw)
         (next state))))
 
 ;; updatedstate returns the modified state and accounts for side effects
@@ -247,10 +249,9 @@
       '((() ()))))
 
 ;; returnstate returns the state with an added return component
-;; NOT used currently
 (define returnstate
   (lambda (exp state next break continue return throw)
-    (cons (vars-list state) (cons (cons (values-list state) '()) (cons (cons (Mvalue (returnexp exp) state next break continue return throw) '()) '())))))
+    (cons state (cons (Mvalue exp state next break continue return throw) '()))))
 
 ;; operator finds the operator of an expression
 (define operator
@@ -296,8 +297,11 @@
 
 ;; returnvalue finds the return component of the state
 (define returnvalue
-  (lambda (exp state next break continue return throw)
-    (Mvalue exp state next break continue return throw)))
+  (lambda (state)
+    (cond
+      [(null? state) '()]
+      [(list? (currentlayer state)) (returnvalue (restof state))]
+      [else (car state)])))
 
 ;; declaredval returns the initial value of a declared var
 (define declaredval
@@ -317,6 +321,7 @@
     (cond
       [(null? var) (error 'badexp "Bad expression")]
       [(null? state) (error 'novar "Variable not declared")]
+      [(not (list? (car state))) (error 'novar "Variable not declared")]
       [(var? var (vars-list state)) (cons (list (vars-list state) (setvalue var val (vars-list state) (values-list state))) (restof state))]
       [else (cons (currentlayer state) (newassignstate var val (restof state)))])))
 
