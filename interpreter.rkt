@@ -71,7 +71,8 @@
       [(eq? (operator exp) 'var) (next (assign (varname exp) (Mvalue (val exp) state next break continue return throw) (declare (varname exp) (updatedstate exp state next break continue return throw))))]
       [(eq? (operator exp) '=) (next (assign (varname exp) (Mvalue (val exp) state next break continue return throw) (updatedstate exp state next break continue return throw)))]
       ; block
-      [(eq? (operator exp) 'begin) (next (cdr (evaluate (restof exp) (addnewlayer state) break continue return throw)))]
+      ; [(and (eq? (operator exp) 'begin) (list? (evaluate (restof exp) (addnewlayer state) break continue return throw))) (next (cdr (evaluate (restof exp) (addnewlayer state) break continue return throw)))]
+      [(eq? (operator exp) 'begin) (return (evaluate (restof exp) (addnewlayer state) break continue return throw))]
       ; if
       [(and (eq? (operator exp) 'if) (Mvalue (condition exp) state next break continue return throw))
        (Mstate (then exp) (Mstate (condition exp) state next break continue return throw) next break continue return throw)]
@@ -80,13 +81,13 @@
       ;(Mstate exp (Mstate (body exp)  (Mstate (condition exp) state)))]
       ; while
       ;[(and (eq? (operator exp) 'while) (Mvalue (condition exp) state))]
-      [(eq? (operator exp) 'while)  (loop exp state next (lambda (s) (next s)) continue return throw)]
+      [(eq? (operator exp) 'while)  (loop exp state next (lambda (s) (next s)) (whilecontinuelambda exp next break continue return throw) return throw)]
       ;(Mstate (condition exp) state
 
       ; break
       [(eq? (operator exp) 'break) (break state)]
       ; continue
-      [(eq? (operator exp) 'continue) (continue state)]
+      [(eq? (operator exp) 'continue) (continue (cdr state))]
       ; return
       [(eq? (operator exp) 'return) (return (returnvalue (returnexp exp) state next break continue return throw))]
       ; throw
@@ -158,6 +159,14 @@
       [(eq? (first-variable vars-list) var) (cons val (restof values-list))]
       [else (cons (first-value values-list) (setvalue var val (restof vars-list) (restof values-list)))])))
 
+(define return?
+  (lambda (exp)
+    (cond
+      [(null? exp) #f]
+      [(list? (car exp)) (or (return? (car exp)) (return? (cdr exp)))]
+      [(eq? (car exp) 'return) #t]
+      [else (return? (restof exp))])))
+
 ;;;; Abstractions----------------------------------------------------------
 
 ;; newlambda returns a new function
@@ -176,14 +185,6 @@
   (lambda ()
     (lambda (s) s)))
 
-;(define newreturnlambda
-;  (lambda ()
-;    (lambda (v)
-;      (cond
-;        [(and (boolean? v) v) 'true]
-;        [(and (boolean? v) (not v)) 'false]
-;        [else v]))))
-
 (define newreturnlambda
   (lambda ()
     (lambda (v)
@@ -195,6 +196,16 @@
 (define newthrowlambda
   (lambda  ()
     (lambda (s) s)))
+
+(define whilecontinuelambda
+  (lambda (exp next break continue return throw)
+    (lambda (s)
+      (Mstate exp s next break continue return throw))))
+
+(define continuenextlambda
+  (lambda (next)
+    (lambda (s)
+      (next (cdr s)))))
 
 (define currentlayer
   (lambda (state)
