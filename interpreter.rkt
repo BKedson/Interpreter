@@ -34,7 +34,7 @@
       [(number? exp) exp]
       [(eq? 'true exp) #t]
       [(eq? 'false exp) #f]
-      [(and (not (list? exp)) (var? exp (vars-list state))) (valueof exp (vars-list state) (values-list state))] ; checks if expression is a variable
+      [(and (not (list? exp)) (var? exp (vars-list-all state))) (valueof exp (vars-list state) (values-list state))] ; checks if expression is a variable
       [(not (list? exp)) (error 'novar "Variable not declared")]
       [(null? exp) exp]
       [(and (eq? (operator exp) '-) (null? (rightoperand exp))) (- (Mvalue (leftoperand exp) state next break continue return throw))] ; unary minus
@@ -64,7 +64,7 @@
       [(number? exp) state] ; return? next? what?
       [(eq? 'true exp) state]
       [(eq? 'false exp) state]
-      [(and (not (list? exp)) (var? exp (vars-list state))) state] ; checks if expression is a variable
+      [(and (not (list? exp)) (var? exp (vars-list-all state))) state] ; checks if expression is a variable
       [(not (list? exp)) (error 'novar "Variable not declared")]
       [(null? exp) (next state)]
       [(and (eq? (operator exp) 'var) (null? (Mvalue (val exp) state next break continue return throw))) (next (declare (varname exp) state))] ; no value specified (only varname)
@@ -113,7 +113,7 @@
 ;;;; Helper Functions--------------------------------------------------
 
 ;; declare adds a new variable to the list of variables stored in the state and sets its value to
-;; null; if the variable is already declared, it will overwrite the value
+;; null; if the variable is already declared in the current layer, it will overwrite the value
 (define declare
  (lambda (var state)
    (if (var? var (vars-list state))
@@ -128,7 +128,7 @@
         (newassignstate var val state)
         (error 'badassign "Bad assignment"))))
       
-;; var? searches through the vars-list in the state and returns #t if the variable has been declared
+;; var? searches through the given vars-list and returns #t if the variable has been declared
 (define var?
   (lambda (exp vars-list)
     (cond
@@ -136,6 +136,7 @@
       [(null? vars-list) #f]
       [(eq? (first-variable vars-list) exp) #t]
       [else (var? exp (restof vars-list))])))
+    
 
 ;; valueof searches through the state and returns the associated value of a given var
 (define valueof
@@ -214,9 +215,10 @@
 ;; newstate generates an initial state for the program
 (define newstate
   (lambda ()
-      '(() ())))
+      '((() ()))))
 
 ;; returnstate returns the state with an added return component
+;; NOT used currently
 (define returnstate
   (lambda (exp state next break continue return throw)
     (cons (vars-list state) (cons (cons (values-list state) '()) (cons (cons (Mvalue (returnexp exp) state next break continue return throw) '()) '())))))
@@ -276,12 +278,14 @@
 ;; newdeclarestate generates a new state based on a declaration
 (define newdeclarestate
   (lambda (var state)
-    (list (cons var (vars-list state)) (cons (declaredval) (values-list state)))))
+     (if (null? (cdr state))
+        (cons (list (cons var (vars-list state)) (cons (declaredval) (values-list state))) '())
+        (cons (cons (list (cons var (vars-list state)) (cons (declaredval) (values-list state))) '()) (restof state)))))
 
 ;; newassignstate generates a new state based on an assignment
 (define newassignstate
   (lambda (var val state)
-    (list (vars-list state) (setvalue var val (vars-list state) (values-list state)))))
+    (cons (list (vars-list state) (setvalue var val (vars-list state) (values-list state))) '())))
 
 ;; condition finds the condition of an if or while expression
 (define condition
@@ -311,12 +315,18 @@
         '()
         (caddr exp))))
 
-;; vars-list finds the list of variables in the state
+;; vars-list finds the list of variables in the current layer of the state
 (define vars-list
   (lambda (state)
     (if (null? state)
         state
-        (car state))))
+        (caar state))))
+
+(define vars-list-all
+  (lambda (state)
+    (if (null? state)
+        state
+        (append (vars-list state) (vars-list-all (cdr state))))))
 
 ;; first-variable finds the first variable in the variables list from the state
 (define first-variable
@@ -330,7 +340,7 @@
   (lambda (state)
     (if (null? vars-list)
         state
-        (cadr state))))
+        (cadar state))))
 
 ;; first-value finds the first value in the values list from the state
 (define first-value
