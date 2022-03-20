@@ -21,9 +21,7 @@
 ;; evaluate generates a state based on a parse tree and returns the return value
 (define evaluate
   (lambda (tree state break continue return throw)
-      (if (null? tree)
-          (returnvalue state)
-          (Mstate (firstexp tree) state (newnextlambda tree break continue return throw) break continue return throw)))) ; (evaluate (restof tree) 
+          (returnvalue (Mstate (firstexp tree) state (newnextlambda tree break continue return throw) break continue return throw)))) ; (evaluate (restof tree) 
 
 ;;;; Mappings-------------------------------------------------------------
 
@@ -61,7 +59,7 @@
 (define Mstate
   (lambda (exp state next break continue return throw)
     (cond
-      [(not (null? (returnvalue state))) (return (returnstate (returnexp exp) state next break continue return throw))]
+      [(not (null? (returnvalue state))) (return state)]
       [(number? exp) state] ; return? next? what?
       [(eq? 'true exp) state]
       [(eq? 'false exp) state]
@@ -85,7 +83,8 @@
       ;[(and (eq? (operator exp) 'while) (Mvalue (condition exp) state))]
       [(eq? (operator exp) 'while)  (loop exp state next (lambda (s) (next s)) (whilecontinuelambda exp next break continue return throw) return throw)]
       ;(Mstate (condition exp) state
-
+      ;try
+      [(eq? (operator exp) 'try) (Mstate (tryblock exp) state (trynext exp next break continue return throw) (trybreak exp break continue return throw) (trycontinue exp break continue return throw) (tryreturn) (trythrow exp next break continue return throw))]
       ; break
       [(eq? (operator exp) 'break) (break (cdr state))]
       ; continue
@@ -93,7 +92,7 @@
       ; return
       [(eq? (operator exp) 'return) (return (returnstate (returnexp exp) state next break continue return throw))]
       ; throw
-      [(eq? (operator exp) 'throw) (throw state)]
+      [(eq? (operator exp) 'throw) (throw state (throwval exp))]
       ; values
       [(and (eq? (operator exp) '-) (null? (rightoperand exp))) (updatedstate exp state next break continue return throw)] ; unary minus
       [(eq? (operator exp) '-) (updatedstate exp state next break continue return throw)]
@@ -176,7 +175,7 @@
   (lambda (tree break continue return throw)
     (lambda (s)
       (if (null? (restof tree))
-                    s
+                    (removelayer s)
                     (Mstate (car (restof tree)) s (newnextlambda (cdr tree) break continue return throw) break continue return throw)))))
 
 (define newbreaklambda
@@ -197,7 +196,11 @@
 
 (define newthrowlambda
   (lambda  ()
-    (lambda (s) s)))
+    (lambda (s e) e)))
+
+(define removelayer
+  (lambda (s)
+    (cdr s)))
 
 (define whilecontinuelambda
   (lambda (exp next break continue return throw)
@@ -213,6 +216,70 @@
   (lambda (state)
     (car state)))
 
+(define throwval
+  (lambda (exp)
+    (if (null? (cdr exp))
+        '()
+        (cadr exp))))
+
+(define trynext
+  (lambda (exp next break continue return throw)
+    (lambda (s)
+      (if (null? (finallyblock exp))
+          (next s)
+          (Mstate (finallyblock exp) s next break continue return throw)))))
+
+(define trybreak
+  (lambda (exp break continue return throw)
+    (lambda (s)
+      (if (null? (finallyblock exp))
+          s
+          (Mstate (finallyblock exp) s break break continue return throw)))))
+
+(define trycontinue
+  (lambda (exp break continue return throw)
+    (lambda (s)
+       (if (null? (finallyblock exp))
+           s
+           (Mstate (finallyblock exp) s continue break continue return throw)))))
+
+(define tryreturn
+  (lambda ()
+    '()))
+
+(define trythrow
+  (lambda (exp next break continue return throw)
+    (lambda (s e)
+      (if (null? (finallyblock exp))
+          (Mstate (catchblock exp) (assign (catchvar exp) e
+              (declare (catchvar exp) s)) (trynext exp next break continue return throw)
+              (trybreak exp break continue return throw) (trycontinue exp break continue return throw) (tryreturn)
+              throw)
+          (Mstate (catchblock exp) (assign (catchvar exp) e
+              (declare (catchvar exp) s)) (trynext exp next break continue return throw)
+              (trybreak exp break continue return throw) (trycontinue exp break continue return throw) (tryreturn)
+              (lambda (s1 e1) (Mstate (finallyblock exp) s1
+              (lambda (s2) (throw s2 e1)) (lambda (s2) (throw s2 e1)) (lambda (s2) (throw s2 e1))
+              (lambda (v) (throw s1 e1)) throw)))))))
+
+(define tryblock
+  (lambda (exp)
+    (cons 'begin (cadr exp))))
+
+(define catchblock
+  (lambda (exp)
+    (cons 'begin (cadr (cdaddr exp)))))
+
+(define finallyblock
+  (lambda (exp)
+    (if (null? (car (cdddar exp)))
+    '()
+    (cons 'begin (caadr (cadddr exp))))))
+
+(define catchvar
+  (lambda (block)
+    (caar (cdaddr block))))
+
 ;; addnewlayer
 (define addnewlayer
   (lambda (state)
@@ -222,7 +289,7 @@
 (define loop
   (lambda (exp state next break continue return throw)
     (if (Mvalue (condition exp) state next break continue return throw)
-        (Mstate (body exp) state (lambda (s) (Mstate exp (cdr s) next break continue return throw)) break continue return throw)
+        (Mstate (body exp) state (lambda (s) (Mstate exp s next break continue return throw)) break continue return throw)
         (next state))))
 
 ;; updatedstate returns the modified state and accounts for side effects
