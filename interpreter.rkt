@@ -22,7 +22,7 @@
 (define evaluate
   (lambda (tree state break continue return throw)
       (if (null? tree)
-          '() ; (returnvalue state)
+          state ; (returnvalue state)
           (Mstate (firstexp tree) state (newnextlambda tree break continue return throw) break continue return throw)))) ; (evaluate (restof tree) 
 
 ;;;; Mappings-------------------------------------------------------------
@@ -34,7 +34,7 @@
       [(number? exp) exp]
       [(eq? 'true exp) #t]
       [(eq? 'false exp) #f]
-      [(and (not (list? exp)) (var? exp (vars-list-all state))) (valueof exp (vars-list state) (values-list state))] ; checks if expression is a variable
+      [(and (not (list? exp)) (var? exp (vars-list-all state))) (valueof exp (vars-list-all state) (values-list-all state))] ; checks if expression is a variable
       [(not (list? exp)) (error 'novar "Variable not declared")]
       [(null? exp) exp]
       [(and (eq? (operator exp) '-) (null? (rightoperand exp))) (- (Mvalue (leftoperand exp) state next break continue return throw))] ; unary minus
@@ -70,7 +70,8 @@
       [(and (eq? (operator exp) 'var) (null? (Mvalue (val exp) state next break continue return throw))) (next (declare (varname exp) state))] ; no value specified (only varname)
       [(eq? (operator exp) 'var) (next (assign (varname exp) (Mvalue (val exp) state next break continue return throw) (declare (varname exp) (updatedstate exp state next break continue return throw))))]
       [(eq? (operator exp) '=) (next (assign (varname exp) (Mvalue (val exp) state next break continue return throw) (updatedstate exp state next break continue return throw)))]
-
+      ; block
+      [(eq? (operator exp) 'begin) (next (cdr (evaluate (restof exp) (addnewlayer state) break continue return throw)))]
       ; if
       [(and (eq? (operator exp) 'if) (Mvalue (condition exp) state next break continue return throw))
        (Mstate (then exp) (Mstate (condition exp) state next break continue return throw) next break continue return throw)]
@@ -124,7 +125,7 @@
 ;; is already assigned, it will overwrite the value
 (define assign
   (lambda (var val state)
-    (if (var? var (vars-list state))
+    (if (var? var (vars-list-all state))
         (newassignstate var val state)
         (error 'badassign "Bad assignment"))))
       
@@ -164,7 +165,7 @@
   (lambda (tree break continue return throw)
     (lambda (s)
       (if (null? (restof tree))
-                    '()
+                    s
                     (Mstate (car (restof tree)) s (newnextlambda (cdr tree) break continue return throw) break continue return throw)))))
 
 (define newbreaklambda
@@ -174,6 +175,14 @@
 (define newcontinuelambda
   (lambda ()
     (lambda (s) s)))
+
+;(define newreturnlambda
+;  (lambda ()
+;    (lambda (v)
+;      (cond
+;        [(and (boolean? v) v) 'true]
+;        [(and (boolean? v) (not v)) 'false]
+;        [else v]))))
 
 (define newreturnlambda
   (lambda ()
@@ -186,6 +195,15 @@
 (define newthrowlambda
   (lambda  ()
     (lambda (s) s)))
+
+(define currentlayer
+  (lambda (state)
+    (car state)))
+
+;; addnewlayer
+(define addnewlayer
+  (lambda (state)
+    (cons '(() ()) state)))
 
 ;; loop does something
 (define loop
@@ -278,14 +296,18 @@
 ;; newdeclarestate generates a new state based on a declaration
 (define newdeclarestate
   (lambda (var state)
-     (if (null? (cdr state))
+     (if (null? (restof state))
         (cons (list (cons var (vars-list state)) (cons (declaredval) (values-list state))) '())
-        (cons (cons (list (cons var (vars-list state)) (cons (declaredval) (values-list state))) '()) (restof state)))))
+        (cons (list (cons var (vars-list state)) (cons (declaredval) (values-list state))) (restof state)))))
 
 ;; newassignstate generates a new state based on an assignment
 (define newassignstate
   (lambda (var val state)
-    (cons (list (vars-list state) (setvalue var val (vars-list state) (values-list state))) '())))
+    (cond
+      [(null? var) (error 'badexp "Bad expression")]
+      [(null? state) (error 'novar "Variable not declared")]
+      [(var? var (vars-list state)) (cons (list (vars-list state) (setvalue var val (vars-list state) (values-list state))) (restof state))]
+      [else (cons (currentlayer state) (newassignstate var val (restof state)))])))
 
 ;; condition finds the condition of an if or while expression
 (define condition
@@ -335,12 +357,19 @@
         '()
         (car vars-list))))
 
-;; values-list finds the list of values in the state
+;; values-list finds the list of values in the current layer of the state
 (define values-list
   (lambda (state)
     (if (null? vars-list)
         state
         (cadar state))))
+
+;; values-list-all finds all the values in the state
+(define values-list-all
+  (lambda (state)
+    (if (null? state)
+        state
+        (append (values-list state) (values-list-all (cdr state))))))
 
 ;; first-value finds the first value in the values list from the state
 (define first-value
