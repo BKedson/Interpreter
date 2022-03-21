@@ -72,7 +72,7 @@
       [(and (eq? (operator exp) '!) (boolean? (Mvalue (leftoperand exp) state next break continue return throw)))
        (not (Mvalue (leftoperand exp) state next break continue return throw))]
       [(eq? (operator exp) '=) (valueof (leftoperand exp) (vars-list (Mstate exp state next break continue return throw))
-            (values-list (Mstate exp state next break continue return throw) next break continue return throw))] ; returns the value that was assigned to the specified variable
+            (values-list (Mstate exp state next break continue return throw)) next break continue return throw)] ; returns the value that was assigned to the specified variable
       [else (error 'badexp "Bad expression")])))
 
 ;; Mstate takes an expression and modifies the state accordingly
@@ -93,7 +93,7 @@
             (Mvalue (val exp) state next break continue return throw) (updatedstate exp state next break continue return throw)))]
       ; block
       [(eq? (operator exp) 'begin) (Mstate (firstexp (restof exp)) (addnewlayer state)
-            (blocknextlambda (restof exp) next break continue return throw) break continue return throw)]
+            (blocknextlambda (restof exp) next break continue return throw) (newblockbreaklambda break) (newblockcontinuelambda continue) return throw)]
       ; if
       [(and (eq? (operator exp) 'if) (Mvalue (condition exp) state next break continue return throw))
        (Mstate (then exp) (Mstate (condition exp) state next break continue return throw) next break continue return throw)]
@@ -235,6 +235,18 @@
         (next (removelayer s))
         (Mstate (firstexp (restof exp)) s
                 (blocknextlambda (restof exp) next break continue return throw) break continue return throw)))))
+
+;; newblockbreaklambda removes the current layer when we call break inside a block
+(define newblockbreaklambda
+  (lambda (break)
+    (lambda (s)
+      (break (removelayer s)))))
+
+;; newblockcontinuelambda removes the current layer when we call continue inside a block
+(define newblockcontinuelambda
+  (lambda (continue)
+    (lambda (s)
+      (continue (removelayer s)))))
 
 ;; whilecontinuelambda is the base lambda function for when inside a while loop
 (define whilecontinuelambda

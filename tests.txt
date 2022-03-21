@@ -1,15 +1,4 @@
-var x = 1;
-
-while (x < 4) {
-	if (true) {
-		var y = 3;
-		if (true) {
-			if (x > 1) {
-				break;
-			}
-		}
-	}
-	x = x + 1;
-}
-x = x + y;
+var x = 0;
+while ((x = x + 1) < 21)
+  x = x;
 return x;
