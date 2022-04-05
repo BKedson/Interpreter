@@ -40,39 +40,40 @@
       [(and (eq? (operator exp) '-) (null? (rightoperand exp)))
             (- (Mvalue (leftoperand exp) state next break continue return throw))] ; unary minus
       [(eq? (operator exp) '-) (- (Mvalue (leftoperand exp) state next break continue return throw)
-            (Mvalue (rightoperand exp) (Mstate (leftoperand exp) state next break continue return throw) next break continue return throw))]
+            (Mvalue (rightoperand exp) state next break continue return throw))]
       [(eq? (operator exp) '+) (+ (Mvalue (leftoperand exp) state next break continue return throw)
-            (Mvalue (rightoperand exp) (Mstate (leftoperand exp) state next break continue return throw) next break continue return throw))]
+            (Mvalue (rightoperand exp) state next break continue return throw))]
       [(eq? (operator exp) '*) (* (Mvalue (leftoperand exp) state next break continue return throw)
-            (Mvalue (rightoperand exp) (Mstate (leftoperand exp) state next break continue return throw) next break continue return throw))]
+            (Mvalue (rightoperand exp) state next break continue return throw))]
       [(eq? (operator exp) '/) (quotient (Mvalue (leftoperand exp) state next break continue return throw)
-            (Mvalue (rightoperand exp) (Mstate (leftoperand exp) state next break continue return throw) next break continue return throw))]
+            (Mvalue (rightoperand exp) state next break continue return throw))]
       [(eq? (operator exp) '%) (remainder (Mvalue (leftoperand exp) state next break continue return throw)
-            (Mvalue (rightoperand exp) (Mstate (leftoperand exp) state next break continue return throw) next break continue return throw))]
+            (Mvalue (rightoperand exp) state next break continue return throw))]
       [(eq? (operator exp) '==) (eq? (Mvalue (leftoperand exp) state next break continue return throw)
-            (Mvalue (rightoperand exp) (Mstate (leftoperand exp) state next break continue return throw) next break continue return throw))]
+            (Mvalue (rightoperand exp) state next break continue return throw))]
       [(eq? (operator exp) '!=) (not (eq? (Mvalue (leftoperand exp) state next break continue return throw)
-            (Mvalue (rightoperand exp) (Mstate (leftoperand exp) state next break continue return throw) next break continue return throw)))]
+            (Mvalue (rightoperand exp) state next break continue return throw)))]
       [(eq? (operator exp) '<) (< (Mvalue (leftoperand exp) state next break continue return throw)
-            (Mvalue (rightoperand exp) (Mstate (leftoperand exp) state next break continue return throw) next break continue return throw))]
+            (Mvalue (rightoperand exp) state next break continue return throw))]
       [(eq? (operator exp) '>) (> (Mvalue (leftoperand exp) state next break continue return throw)
-            (Mvalue (rightoperand exp) (Mstate (leftoperand exp) state next break continue return throw) next break continue return throw))]
+            (Mvalue (rightoperand exp) state next break continue return throw))]
       [(eq? (operator exp) '<=) (<= (Mvalue (leftoperand exp) state next break continue return throw)
-            (Mvalue (rightoperand exp) (Mstate (leftoperand exp) state next break continue return throw) next break continue return throw))]
+            (Mvalue (rightoperand exp) state next break continue return throw))]
       [(eq? (operator exp) '>=) (>= (Mvalue (leftoperand exp) state next break continue return throw)
-            (Mvalue (rightoperand exp) (Mstate (leftoperand exp) state next break continue return throw) next break continue return throw))]
+            (Mvalue (rightoperand exp) state next break continue return throw))]
       [(and (eq? (operator exp) '&&) (boolean? (Mvalue (leftoperand exp) state next break continue return throw))
             (boolean? (Mvalue (rightoperand exp) state next break continue return throw)))
        (and (Mvalue (leftoperand exp) state next break continue return throw)
-            (Mvalue (rightoperand exp) (Mstate (leftoperand exp) state next break continue return throw) next break continue return throw))]
+            (Mvalue (rightoperand exp) state next break continue return throw))]
       [(and (eq? (operator exp) '||) (boolean? (Mvalue (leftoperand exp) state next break continue return throw))
             (boolean? (Mvalue (rightoperand exp) state next break continue return throw)))
        (or (Mvalue (leftoperand exp) state next break continue return throw)
-           (Mvalue (rightoperand exp) (Mstate (leftoperand exp) state next break continue return throw) next break continue return throw))]
+           (Mvalue (rightoperand exp) state next break continue return throw))]
       [(and (eq? (operator exp) '!) (boolean? (Mvalue (leftoperand exp) state next break continue return throw)))
        (not (Mvalue (leftoperand exp) state next break continue return throw))]
-      [(eq? (operator exp) '=) (valueof (leftoperand exp) (vars-list (Mstate exp state next break continue return throw))
-            (values-list (Mstate exp state next break continue return throw)) next break continue return throw)] ; returns the value that was assigned to the specified variable
+      [(eq? (operator exp) '=) (valueof (leftoperand exp) (vars-list (assign (varname exp)
+            (Mvalue (val exp) state next break continue return throw) state))
+            (values-list state))] ; returns the value that was assigned to the specified variable
       [else (error 'badexp "Bad expression")])))
 
 ;; Mstate takes an expression and modifies the state accordingly
@@ -88,9 +89,9 @@
       [(and (eq? (operator exp) 'var) (null? (Mvalue (val exp) state next break continue return throw)))
             (next (declare (varname exp) state))] ; no value specified (only varname)
       [(eq? (operator exp) 'var) (next (assign (varname exp)
-            (Mvalue (val exp) state next break continue return throw) (declare (varname exp) (updatedstate exp state next break continue return throw))))]
+            (Mvalue (val exp) state next break continue return throw) (declare (varname exp) state)))]
       [(eq? (operator exp) '=) (next (assign (varname exp)
-            (Mvalue (val exp) state next break continue return throw) (updatedstate exp state next break continue return throw)))]
+            (Mvalue (val exp) state next break continue return throw) state))]
       ; block
       [(eq? (operator exp) 'begin) (Mstate (firstexp (restof exp)) (addnewlayer state)
             (blocknextlambda (restof exp) next break continue return throw) (newblockbreaklambda break) (newblockcontinuelambda continue) return throw)]
@@ -120,26 +121,26 @@
       ; throw
       [(eq? (operator exp) 'throw) (throw state (throwval exp))]
       ; values
-      [(and (eq? (operator exp) '-) (null? (rightoperand exp))) (updatedstate exp state next break continue return throw)] ; unary minus
-      [(eq? (operator exp) '-) (updatedstate exp state next break continue return throw)]
-      [(eq? (operator exp) '+) (updatedstate exp state next break continue return throw)]
-      [(eq? (operator exp) '*) (updatedstate exp state next break continue return throw)]
-      [(eq? (operator exp) '/) (updatedstate exp state next break continue return throw)]
-      [(eq? (operator exp) '%) (updatedstate exp state next break continue return throw)]
-      [(eq? (operator exp) '==) (updatedstate exp state next break continue return throw)]
-      [(eq? (operator exp) '!=) (updatedstate exp state next break continue return throw)]
-      [(eq? (operator exp) '<) (updatedstate exp state next break continue return throw)]
-      [(eq? (operator exp) '>) (updatedstate exp state next break continue return throw)]
-      [(eq? (operator exp) '<=) (updatedstate exp state next break continue return throw)]
-      [(eq? (operator exp) '>=) (updatedstate exp state next break continue return throw)]
+      [(and (eq? (operator exp) '-) (null? (rightoperand exp))) state] ; unary minus
+      [(eq? (operator exp) '-) state]
+      [(eq? (operator exp) '+) state]
+      [(eq? (operator exp) '*) state]
+      [(eq? (operator exp) '/) state]
+      [(eq? (operator exp) '%) state]
+      [(eq? (operator exp) '==) state]
+      [(eq? (operator exp) '!=) state]
+      [(eq? (operator exp) '<) state]
+      [(eq? (operator exp) '>) state]
+      [(eq? (operator exp) '<=) state]
+      [(eq? (operator exp) '>=) state]
       [(and (eq? (operator exp) '&&) (boolean? (Mvalue (leftoperand exp) state next break continue return throw))
             (boolean? (Mvalue (rightoperand exp) state next break continue return throw)))
-       (updatedstate exp state next break continue return throw)]
+       state]
       [(and (eq? (operator exp) '||) (boolean? (Mvalue (leftoperand exp) state next break continue return throw))
             (boolean? (Mvalue (rightoperand exp) state next break continue return throw)))
-       (updatedstate exp state next break continue return throw)]
+       state]
       [(and (eq? (operator exp) '!) (boolean? (Mvalue (leftoperand exp) state next break continue return throw)))
-       (updatedstate exp state next break continue return throw)]
+       state]
       [else (error 'badstate "Bad state")])))
 
 ;;;; Helper Functions--------------------------------------------------
@@ -176,8 +177,8 @@
     (cond
       [(null? exp) (error 'badexp "Bad expression")]
       [(or (null? vars-list) (null? values-list)) (error 'novar "Variable not declared")]
-      [(and(eq? (first-variable vars-list) exp) (null? (first-value values-list))) (error 'noinit "Variable was never initialized")]
-      [(eq? (first-variable vars-list) exp) (first-value values-list)]
+      [(and (eq? (first-variable vars-list) exp) (null? (unbox (first-value values-list)))) (error 'noinit "Variable was never initialized")]
+      [(eq? (first-variable vars-list) exp) (unbox (first-value values-list))]
       [else (valueof exp (restof vars-list) (restof values-list))])))
 
 ;; setvalue assigns a value to a given var and returns the updated values-list; returns an error if the var has not been declared
@@ -186,7 +187,7 @@
     (cond
       [(null? var) (error 'badexp "Bad expression")]
       [(null? vars-list) (error 'novar "Variable not declared")]
-      [(eq? (first-variable vars-list) var) (cons val (restof values-list))]
+      [(eq? (first-variable vars-list) var) (cons (setbox (first-value values-list) val) (restof values-list))]
       [else (cons (first-value values-list) (setvalue var val (restof vars-list) (restof values-list)))])))
 
 ;;;; Abstractions----------------------------------------------------------
@@ -447,7 +448,7 @@
 ;; declaredval returns the initial value of a declared var
 (define declaredval
   (lambda ()
-    '()))
+    (box '())))
 
 ;; newdeclarestate generates a new state based on a declaration
 (define newdeclarestate
@@ -465,6 +466,10 @@
       [(not (list? (car state))) (error 'novar "Variable not declared")]
       [(var? var (vars-list state)) (cons (list (vars-list state) (setvalue var val (vars-list state) (values-list state))) (restof state))]
       [else (cons (currentlayer state) (newassignstate var val (restof state)))])))
+
+(define setbox
+  (lambda (b v)
+    (begin (set-box! b v) b)))
 
 ;; condition finds the condition of an if or while expression
 (define condition
