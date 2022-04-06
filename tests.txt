@@ -1,11 +1,18 @@
-var x = 1;
-var y = 10;
-var r = 0;
+function divide(y) {
+  throw y;
+}
 
 function main() {
-  while (x < y) {
-     r = r + x;
-     x = x + 1;
+  var x;
+
+  try {
+    x = divide(0);
   }
-  return r;
+  catch(e) {
+    x = e;
+  }
+  finally {
+    x = x + 100;
+  }
+  return x;
 }
