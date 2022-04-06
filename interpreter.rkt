@@ -262,7 +262,7 @@
      (newbreaklambda)
      (newcontinuelambda)
      (funcstatereturnlambda state next)
-     (lambda (s e) (throw state e)))))
+     (newfuncthrowlambda next throw))))
 
 ;; bindparams
 (define bindparams
@@ -347,6 +347,12 @@
         [(and (boolean? (returnvalue v)) (not (returnvalue v))) 'false]
         [else v]))))
 
+;; newfuncthrowlambda 
+(define newfuncthrowlambda
+  (lambda (tree)
+    (lambda (s e)
+      (newblocklambda (cons (list 'throw (Mvalue e s throw)) (restof tree)) s next (newbreaklambda) (newcontinuelambda) (newreturnlambda) (newthrowlambda)))))
+    
 ;; newthrowlambda returns a base lambda function for the throw continuation
 (define newthrowlambda
   (lambda  ()
