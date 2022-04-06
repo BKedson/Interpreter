@@ -7,6 +7,7 @@ function main() {
 
   try {
     x = divide(0);
+    x = x + 1;
   }
   catch(e) {
     x = e;

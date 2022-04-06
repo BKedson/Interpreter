@@ -233,7 +233,7 @@
   (lambda (tree)
     (cond
       [(null? tree) error 'nomain "No main function"]
-      [(eq? 'main (functionname (firstexp tree))) (funcbody (firstexp tree))]
+      [(eq? 'main (functionname (firstexp tree))) (cons 'begin (funcbody (firstexp tree)))]
       [else (findmain (restof tree))])))
 
 ;; funcstate returns the portion of the state that's in scope at the time of the function call
@@ -248,7 +248,7 @@
 (define callfunctionvalue
   (lambda (funcname closure actualparams state throw)
     (Mstate (closurebody closure) (bindparams (closurefp closure) actualparams (addnewlayer (closurestate closure funcname state)) state throw)
-     (lambda (s) (error 'noreturn "no return statement"))
+     (blocknextlambda (closurebody closure) (lambda (s) (error 'noreturn "No return statement when return was expected")) (newbreaklambda) (newcontinuelambda) (newreturnlambda) throw)
      (newbreaklambda)
      (newcontinuelambda)
      (newreturnlambda)
@@ -258,11 +258,11 @@
 (define callfunctionstate
   (lambda (funcname closure actualparams state next throw)
     (Mstate (closurebody closure) (bindparams (closurefp closure) actualparams (addnewlayer (closurestate closure funcname state)) state throw)
-     (lambda (s) (next state))
+     (blocknextlambda (closurebody closure) next (newbreaklambda) (newcontinuelambda) (funcstatereturnlambda state next) throw)
      (newbreaklambda)
      (newcontinuelambda)
      (funcstatereturnlambda state next)
-     (newfuncthrowlambda next throw))))
+     (lambda (s e) (throw state e)))))
 
 ;; bindparams
 (define bindparams
@@ -297,7 +297,7 @@
 ;; funcbody finds the body of a function
 (define funcbody
   (lambda (exp)
-    (cons 'begin (cadddr exp))))
+    (cadddr exp)))
 
 ;; returnfuncstate
 (define returnfuncstate
@@ -312,7 +312,7 @@
 ;; closurebody
 (define closurebody
   (lambda (closure)
-    (cadr closure)))
+    (caadr closure)))
 
 ;; closurestate
 (define closurestate
@@ -346,12 +346,6 @@
         [(and (boolean? (returnvalue v)) (returnvalue v)) 'true]
         [(and (boolean? (returnvalue v)) (not (returnvalue v))) 'false]
         [else v]))))
-
-;; newfuncthrowlambda 
-(define newfuncthrowlambda
-  (lambda (tree)
-    (lambda (s e)
-      (newblocklambda (cons (list 'throw (Mvalue e s throw)) (restof tree)) s next (newbreaklambda) (newcontinuelambda) (newreturnlambda) (newthrowlambda)))))
     
 ;; newthrowlambda returns a base lambda function for the throw continuation
 (define newthrowlambda
