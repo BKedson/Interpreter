@@ -172,6 +172,8 @@
         (newassignstate var val state)
         (error 'badassign "Variable not declared"))))
 
+;; getclosue gets the closure of a given function; returns an error if the function has not been defined
+;; The closure is: The function name, the function body, and the state in scope
 (define getclosure
   (lambda (funcname vars-list values-list)
     (cond
@@ -211,7 +213,7 @@
       [else (cons (first-value values-list) (setvalue var val (restof vars-list) (restof values-list)))])))
 
 
-;; setglobals
+;; setglobals declares all global functions and global variables
 (define setglobals
   (lambda (tree state throw)
     (cond
@@ -224,12 +226,13 @@
        (makeclosure (formalparams (firstexp tree)) (funcbody (firstexp tree))) (declare (functionname (firstexp tree)) state)) throw)]
       [else error 'badexp "Invalid operation before main"])))
 
-;; makeclosure
+;; makeclosue creates a closure from a given function
+;; The closure is: The function name, the function body, and the state in scope
 (define makeclosure
   (lambda (formalparams body)
-    (list formalparams body (lambda (fn vars vals) (funcstate fn vars vals))))) ; what is the current state at time of function call? Fix third element of closure?
+    (list formalparams body (lambda (fn vars vals) (funcstate fn vars vals)))))
 
-;; findmain
+;; findmain finds the main function; returns an error if no main method has been defined
 (define findmain
   (lambda (tree)
     (cond
@@ -243,29 +246,32 @@
     (cond
       [(null? vars-list) (error 'funcnotdefined "Function called that does not exist")]
       [(eq? (first-variable vars-list) funcname) (returnfuncstate vars-list values-list)]
-      [else (funcstate funcname (restof vars-list) (restof values-list))]))) ; this might cause issues? let's find out
+      [else (funcstate funcname (restof vars-list) (restof values-list))])))
 
-;; callfunctionvalue
+;; callfunctionvalue finds the output of a function; returns an error if no return value is given
 (define callfunctionvalue
   (lambda (funcname closure actualparams state throw)
-    (Mstate (closurebody closure) (bindparams (closurefp closure) actualparams (addnewlayer (closurestate closure funcname state)) state throw)
+    (Mstate (closurebody closure) (bindparams (closurefp closure) actualparams
+            (addnewlayer (closurestate closure funcname state)) state throw)
      (lambda (s) (error 'noreturn "no return statement"))
      (newbreaklambda)
      (newcontinuelambda)
      (newreturnlambda)
-     (newfuncthrowlambda next))))
+     (lambda (s e) (throw state e)))))
 
-;; callfunctionstate
+;; callfunctionstate finds the state resulting from a run of a function
 (define callfunctionstate
   (lambda (funcname closure actualparams state next throw)
-    (Mstate (closurebody closure) (bindparams (closurefp closure) actualparams (addnewlayer (closurestate closure funcname state)) state throw)
+    (Mstate (closurebody closure) (bindparams (closurefp closure) actualparams
+            (addnewlayer (closurestate closure funcname state)) state throw)
      (lambda (s) (next state))
      (newbreaklambda)
      (newcontinuelambda)
      (funcstatereturnlambda state next)
-     (newfuncthrowlambda next))))
+     (lambda (s e) (throw state e)))))
 
-;; bindparams
+;; bindparams binds the values of the actual paramaters to the names of the formal parameters
+;; NOTE: This method uses call-by-value
 (define bindparams
   (lambda (fp ap fstate state throw)
     (cond
@@ -275,7 +281,7 @@
 
 ;;;; Abstractions----------------------------------------------------------
 
-;; funcstatereturnlambda
+;; funcstatereturnlambda defines the return lambda for function calls
 (define funcstatereturnlambda
   (lambda (state next)
     (lambda (v) (next state))))
@@ -285,12 +291,12 @@
   (lambda (exp)
     (cadr exp)))
 
-;; actualparams
+;; actualparams finds the actual parameters from a function call
 (define actualparams
   (lambda (exp)
     (cddr exp)))
 
-;; formalparams
+;; formalparams finds the formal parameters from a function cal
 (define formalparams
   (lambda (exp)
     (caddr exp)))
@@ -300,22 +306,22 @@
   (lambda (exp)
     (cons 'begin (cadddr exp))))
 
-;; returnfuncstate
+;; returnfuncstate builds the state determined by the closure
 (define returnfuncstate
   (lambda (vars-list values-list)
     (cons (list vars-list values-list) '())))
 
-;; closurefp
+;; closurefp finds the formal parameters of a closure
 (define closurefp
   (lambda (closure)
     (car closure)))
 
-;; closurebody
+;; closurebody finds the body of the function from the closure
 (define closurebody
   (lambda (closure)
     (cadr closure)))
 
-;; closurestate
+;; closurestate finds the state in scope for a function call from the closure
 (define closurestate
   (lambda (closure funcname state)
     ((caddr closure) funcname (vars-list-all state) (values-list-all state))))
@@ -347,12 +353,6 @@
         [(and (boolean? (returnvalue v)) (returnvalue v)) 'true]
         [(and (boolean? (returnvalue v)) (not (returnvalue v))) 'false]
         [else v]))))
-
-;; newfuncthrowlambda 
-(define newfuncthrowlambda
-  (lambda (next)
-    (lambda (s e)
-      (list 'throw (Mvalue e s next)))))
     
 ;; newthrowlambda returns a base lambda function for the throw continuation
 (define newthrowlambda
@@ -655,7 +655,7 @@
         '()
         (car vars-list))))
 
-;; first-param
+;; first-param finds the first paramter from the vars-list
 (define first-param
   (lambda (p)
     (if (null? vars-list)
