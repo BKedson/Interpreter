@@ -5,7 +5,7 @@
 ;;;; ********************************************************
 ;;;;   Aracelli Doescher (ahd47) and Brandon Kedson (bjk118)
 ;;;;   CSDS 345
-;;;;   Simple Language Interpreter Part 2
+;;;;   Simple Language Interpreter Part 3
 ;;;; ********************************************************
 
 ;; interpret reads in an input file consisting of a java-like language, parses it, and returns a specified return value
