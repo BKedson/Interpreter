@@ -80,7 +80,6 @@
             (values-list state))] ; returns the value that was assigned to the specified variable
       ; function calls
       [(eq? (operator exp) 'funcall) (Mvalue (returnvalue (callfunctionvalue (functionname exp) (getclosure (functionname exp) (vars-list-all state) (values-list-all state)) (actualparams exp) state throw)) state throw)]
-      [(eq? (operator exp) 'throw) (throw state (Mvalue (throwval exp) state throw))]
       [else (error 'badexp "Bad expression")])))
 
 ;; Mstate takes an expression and modifies the state accordingly
@@ -253,7 +252,7 @@
      (newbreaklambda)
      (newcontinuelambda)
      (newreturnlambda)
-     (newfuncthrowlambda next))))
+     (lambda (s e) (throw state e)))))
 
 ;; callfunctionstate
 (define callfunctionstate
@@ -263,7 +262,7 @@
      (newbreaklambda)
      (newcontinuelambda)
      (funcstatereturnlambda state next)
-     (newfuncthrowlambda next))))
+     (lambda (s e) (throw state e)))))
 
 ;; bindparams
 (define bindparams
@@ -350,9 +349,9 @@
 
 ;; newfuncthrowlambda 
 (define newfuncthrowlambda
-  (lambda (next)
+  (lambda (tree next throw)
     (lambda (s e)
-      (list 'throw (Mvalue e s next)))))
+      (blocknextlambda (cons (list 'throw (Mvalue e s throw)) (restof tree)) s next (newbreaklambda) (newcontinuelambda) (newreturnlambda) (newthrowlambda)))))
     
 ;; newthrowlambda returns a base lambda function for the throw continuation
 (define newthrowlambda
