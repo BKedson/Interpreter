@@ -76,7 +76,7 @@
        (not (Mvalue (leftoperand exp) state throw))]
       ; assign
       [(eq? (operator exp) '=) (valueof (leftoperand exp) (vars-list (assign (varname exp)
-            (Mvalue (val exp) state) state throw))
+            (Mvalue (val exp) state throw) state))
             (values-list state))] ; returns the value that was assigned to the specified variable
       ; function calls
       [(eq? (operator exp) 'funcall) (Mvalue (returnvalue (callfunctionvalue (functionname exp) (getclosure (functionname exp) (vars-list-all state) (values-list-all state)) (actualparams exp) state throw)) state throw)]
