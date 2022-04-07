@@ -172,7 +172,7 @@
         (newassignstate var val state)
         (error 'badassign "Variable not declared"))))
 
-;; getclosue gets the closure of a given function; returns an error if the function has not been defined
+;; getclosure gets the closure of a given function; returns an error if the function has not been defined
 ;; The closure is: The function name, the function body, and the state in scope
 (define getclosure
   (lambda (funcname vars-list values-list)
@@ -226,7 +226,7 @@
        (makeclosure (formalparams (firstexp tree)) (funcbody (firstexp tree))) (declare (functionname (firstexp tree)) state)) throw)]
       [else error 'badexp "Invalid operation before main"])))
 
-;; makeclosue creates a closure from a given function
+;; makeclosure creates a closure from a given function
 ;; The closure is: The function name, the function body, and the state in scope
 (define makeclosure
   (lambda (formalparams body)
