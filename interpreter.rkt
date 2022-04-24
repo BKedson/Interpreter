@@ -1,28 +1,34 @@
 #lang racket
 
-(require "functionParser.rkt")
+(require "classParser.rkt")
 
 ;;;; ********************************************************
 ;;;;   Aracelli Doescher (ahd47) and Brandon Kedson (bjk118)
 ;;;;   CSDS 345
-;;;;   Simple Language Interpreter Part 3
+;;;;   Simple Language Interpreter Part 4
 ;;;; ********************************************************
 
 ;; interpret reads in an input file consisting of a java-like language, parses it, and returns a specified return value
 (define interpret
-  (lambda (filename)
+  (lambda (filename mainclassname)
     (evaluate (parser filename)
               (newstate)
               (newbreaklambda)
               (newcontinuelambda)
               (newreturnlambda)
-              (newthrowlambda))))
+              (newthrowlambda)
+              mainclassname)))
 
 ;; evaluate searches a parse tree and returns the return value
 (define evaluate
-  (lambda (tree state break continue return throw)
-          (returnvalue (Mstate (findmain tree) (setglobals tree state throw)
-                       (newnextlambda tree break continue return throw) break continue return throw)))) ; (evaluate (restof tree) 
+  (lambda (tree state break continue return throw mainclassname)
+          (run tree (getclassclosure mainclassname (class-names-list (setclasses tree state throw)) (class-closures-list (setclasses tree state throw))) mainclassname state break continue return throw))) ; (evaluate (restof tree)
+
+;; run
+(define run
+  (lambda (tree classclosure mainclassname state break continue return throw)
+    (returnvalue (Mstate (findmain (class-funcnames-list classclosure) (class-funcclosures-list classclosure)) (functionclosurestate (getfunctionclosure 'main (class-funcnames-list classclosure) (class-funcclosures-list classclosure)) 'main classclosure)
+                         (newnextlambda tree break continue return throw) break continue return throw))))
 
 ;;;; Mappings-------------------------------------------------------------
 
@@ -79,7 +85,7 @@
             (Mvalue (val exp) state throw) state))
             (values-list state))] ; returns the value that was assigned to the specified variable
       ; function calls
-      [(eq? (operator exp) 'funcall) (Mvalue (returnvalue (callfunctionvalue (functionname exp) (getclosure (functionname exp) (vars-list-all state) (values-list-all state)) (actualparams exp) state throw)) state throw)]
+      [(eq? (operator exp) 'funcall) (Mvalue (returnvalue (callfunctionvalue (functionname exp) (getfunctionclosure (functionname exp) (vars-list-all state) (values-list-all state)) (actualparams exp) state throw)) state throw)]
       [(eq? (operator exp) 'throw) (throw state (Mvalue (throwval exp) state throw))]
       [else (error 'badexp "Bad expression")])))
 
@@ -149,12 +155,32 @@
       [(and (eq? (operator exp) '!) (boolean? (Mvalue (leftoperand exp) state throw)))
        state]
       [(eq? 'function (operator exp)) (next (assign (functionname exp)
-       (makeclosure (formalparams exp) (funcbody exp)) (declare (functionname exp) state)))]
+       (makefuncclosure (formalparams exp) (funcbody exp)) (declare (functionname exp) state)))]
       ; function calls
-      [(eq? (operator exp) 'funcall) (callfunctionstate (functionname exp) (getclosure (functionname exp) (vars-list-all state) (values-list-all state)) (actualparams exp) state next throw)]
+      [(eq? (operator exp) 'funcall) (callfunctionstate (functionname exp) (getfunctionclosure (functionname exp) (vars-list-all state) (values-list-all state)) (actualparams exp) state next throw)]
       [else (error 'badstate "Bad state")])))
 
 ;;;; Helper Functions--------------------------------------------------
+
+;; getclassclosure
+(define getclassclosure
+  (lambda (classname class-names-list class-closures-list)
+     (cond
+      [(null? classname) (error 'badexp "No class name specified")]
+      [(or (null? class-names-list) (null? class-closures-list)) (error 'noclass "Class not defined")]
+      [(and (eq? (first-variable class-names-list) classname) (null? (unbox (first-value class-closures-list)))) (error 'noclass "Class not defined")]
+      [(eq? (first-variable class-names-list) classname) (unbox (first-value class-closures-list))]
+      [else (getclassclosure classname (restof class-names-list) (restof class-closures-list))])))
+
+;; makeclassclosure
+(define makeclassclosure
+  (lambda (superclass instancevarslist instanceinitvalslist funcnameslist funcclosureslist)
+    (list superclass instancevarslist instanceinitvalslist funcnameslist funcclosureslist)))
+
+;; makeinstanceclosure
+(define makeinstanceclosure
+  (lambda (runtimetype instancevalslist)
+    (list runtimetype instancevalslist)))
 
 ;; declare adds a new variable to the list of variables stored in the current scope of the state and sets its value to
 ;; null; if the variable is already declared in the current layer, it will overwrite the value
@@ -172,16 +198,16 @@
         (newassignstate var val state)
         (error 'badassign "Variable not declared"))))
 
-;; getclosure gets the closure of a given function; returns an error if the function has not been defined
+;; getfunctionclosure gets the closure of a given function; returns an error if the function has not been defined
 ;; The closure is: The function name, the function body, and the state in scope
-(define getclosure
-  (lambda (funcname vars-list values-list)
+(define getfunctionclosure
+  (lambda (funcname funcnames-list funcclsr-list)
     (cond
       [(null? funcname) (error 'badexp "No function name specified")]
-      [(or (null? vars-list) (null? values-list)) (error 'nofunc "Function not defined")]
-      [(and (eq? (first-variable vars-list) funcname) (null? (unbox (first-value values-list)))) (error 'nofunc "Function not defined")]
-      [(eq? (first-variable vars-list) funcname) (unbox (first-value values-list))]
-      [else (getclosure funcname (restof vars-list) (restof values-list))])))
+      [(or (null? funcnames-list) (null? funcclsr-list)) (error 'nofunc "Function not defined")]
+      [(and (eq? (first-variable funcnames-list) funcname) (null? (unbox (first-value funcclsr-list)))) (error 'nofunc "Function not defined")]
+      [(eq? (first-variable funcnames-list) funcname) (unbox (first-value funcclsr-list))]
+      [else (getfunctionclosure funcname (restof funcnames-list) (restof funcclsr-list))])))
       
 ;; var? searches through the given vars-list and returns #t if the variable has been declared
 (define var?
@@ -212,37 +238,58 @@
       [(eq? (first-variable vars-list) var) (cons (setbox (first-value values-list) val) (restof values-list))]
       [else (cons (first-value values-list) (setvalue var val (restof vars-list) (restof values-list)))])))
 
+;; setclasses
+(define setclasses
+  (lambda (tree state throw)
+    (cond
+      [(null? tree) state]
+      [(eq? 'class (operator (firstexp tree ))) (setclasses (restof tree) (assign (classname (firstexp tree))
+       (makeclassclosure (superclass (firstexp tree)) (instancevarslist (firstexp tree) state throw) (instanceinitvalslist (firstexp tree) state throw)
+                         (funcnameslist (firstexp tree) state throw) (funcclosureslist (firstexp tree) state throw)) (declare (classname (firstexp tree)) state)) throw)]
+      [else (error 'badexp "Invalid operation when defining classes")])))
 
-;; setglobals declares all global functions and global variables
-(define setglobals
+;; setclassvars declares all class variables
+(define setclassvars
   (lambda (tree state throw)
     (cond
       [(null? tree) state]
       [(and (eq? (operator (firstexp tree)) 'var) (null? (Mvalue (val (firstexp tree)) state throw)))
-            (setglobals (restof tree) (declare (varname (firstexp tree) state)) throw)] ; no value specified (only varname)
-      [(eq? (operator (firstexp tree)) 'var) (setglobals (restof tree) (assign (varname (firstexp tree))
+            (setclassvars (restof tree) (declare (varname (firstexp tree) state)) throw)] ; no value specified (only varname)
+      [(eq? (operator (firstexp tree)) 'var) (setclassvars (restof tree) (assign (varname (firstexp tree))
             (Mvalue (val (firstexp tree)) state throw) (declare (varname (firstexp tree)) state)) throw)]
-      [(eq? 'function (operator (firstexp tree))) (setglobals (restof tree) (assign (functionname (firstexp tree))
-       (makeclosure (formalparams (firstexp tree)) (funcbody (firstexp tree))) (declare (functionname (firstexp tree)) state)) throw)]
-      [else error 'badexp "Invalid operation before main"])))
+      [(eq? 'function (operator (firstexp tree))) (setclassvars (restof tree) state throw)]
+      [(eq? 'static-function (operator (firstexp tree))) (setclassvars (restof tree) state throw)]
+      [else (error 'badexp "Invalid operation in class definition")])))
 
-;; makeclosure creates a closure from a given function
+;; setclassfunctions declares all class functions
+(define setclassfunctions
+  (lambda (tree state throw)
+    (cond
+      [(null? tree) state]
+      [(eq? (operator (firstexp tree)) 'var) (setclassfunctions (restof tree) state throw)]
+      [(eq? 'static-function (operator (firstexp tree))) (setclassfunctions (restof tree) (assign (functionname (firstexp tree))
+       (makefuncclosure (formalparams (firstexp tree)) (funcbody (firstexp tree))) (declare (functionname (firstexp tree)) state)) throw)]
+      [(eq? 'function (operator (firstexp tree))) (setclassfunctions (restof tree) (assign (functionname (firstexp tree))
+       (makefuncclosure (formalparams (firstexp tree)) (funcbody (firstexp tree))) (declare (functionname (firstexp tree)) state)) throw)]
+      [else (error 'badexp "Invalid operation in class definition")])))
+
+;; makefuncclosure creates a closure from a given function
 ;; The closure is: The function name, the function body, and the state in scope
-(define makeclosure
+(define makefuncclosure
   (lambda (formalparams body)
-    (list formalparams body (lambda (fn vars vals) (funcstate fn vars vals)))))
+    (list formalparams body (lambda (vars vals fnl fcl) (returnfuncstate vars vals fnl fcl)))))
 
 ;; findmain finds the main function; returns an error if no main method has been defined
 (define findmain
-  (lambda (tree)
+  (lambda (function-names-list function-closures-list)
     (cond
-      [(null? tree) error 'nomain "No main function"]
-      [(eq? 'main (functionname (firstexp tree))) (funcbody (firstexp tree))]
-      [else (findmain (restof tree))])))
+      [(or (null? function-names-list) (null? function-closures-list)) error 'nomain "No main function"]
+      [(eq? 'main (first-variable function-names-list)) (functionclosurebody (unbox (first-value function-closures-list)))]
+      [else (findmain (restof function-names-list) (restof function-closures-list))])))
 
 ;; funcstate returns the portion of the state that's in scope at the time of the function call
 (define funcstate
-  (lambda (funcname vars-list values-list)
+  (lambda (funcname vars-list values-list funcnames-list funcclsr-list)
     (cond
       [(null? vars-list) (error 'funcnotdefined "Function called that does not exist")]
       [(eq? (first-variable vars-list) funcname) (returnfuncstate vars-list values-list)]
@@ -251,8 +298,8 @@
 ;; callfunctionvalue finds the output of a function; returns an error if no return value is given
 (define callfunctionvalue
   (lambda (funcname closure actualparams state throw)
-    (Mstate (closurebody closure) (bindparams (closurefp closure) actualparams
-            (addnewlayer (closurestate closure funcname state)) state throw)
+    (Mstate (functionclosurebody closure) (bindparams (closurefp closure) actualparams
+            (addnewlayer (functionclosurestate closure funcname state)) state throw)
      (lambda (s) (error 'noreturn "no return statement"))
      (newbreaklambda)
      (newcontinuelambda)
@@ -262,8 +309,8 @@
 ;; callfunctionstate finds the state resulting from a run of a function
 (define callfunctionstate
   (lambda (funcname closure actualparams state next throw)
-    (Mstate (closurebody closure) (bindparams (closurefp closure) actualparams
-            (addnewlayer (closurestate closure funcname state)) state throw)
+    (Mstate (functionclosurebody closure) (bindparams (closurefp closure) actualparams
+            (addnewlayer (functionclosurestate closure funcname state)) state throw)
      (lambda (s) (next state))
      (newbreaklambda)
      (newcontinuelambda)
@@ -280,6 +327,38 @@
       [else (bindparams (restof fp) (restof ap) (assign (first-param fp) (Mvalue (first-param ap) state throw) (declare (first-param fp) fstate)) state throw)])))
 
 ;;;; Abstractions----------------------------------------------------------
+
+;; superclass
+(define superclass
+  (lambda (exp)
+    (if (null? (caddr exp))
+        '()
+        (car (cdaddr exp)))))
+
+;; instancevarslist
+(define instancevarslist
+  (lambda (exp state throw)
+    (vars-list (setclassvars (cadddr exp) state throw))))
+
+;; instanceinitvalslist
+(define instanceinitvalslist
+  (lambda (exp state throw)
+    (values-list (setclassvars (cadddr exp) state throw))))
+
+;; funcnameslist
+(define funcnameslist
+  (lambda (exp state throw)
+    (vars-list (setclassfunctions (cadddr exp) state throw))))
+
+;; funcclosureslist
+(define funcclosureslist
+  (lambda (exp state throw)
+    (values-list (setclassfunctions (cadddr exp) state throw))))
+
+;; classname
+(define classname
+  (lambda (exp)
+    (cadr exp)))
 
 ;; funcstatereturnlambda defines the return lambda for function calls
 (define funcstatereturnlambda
@@ -308,23 +387,23 @@
 
 ;; returnfuncstate builds the state determined by the closure
 (define returnfuncstate
-  (lambda (vars-list values-list)
-    (cons (list vars-list values-list) '())))
+  (lambda (vars-list values-list funcnames-list funcclsr-list)
+    (cons (list (append vars-list funcnames-list) (append values-list funcclsr-list)) '())))
 
 ;; closurefp finds the formal parameters of a closure
 (define closurefp
   (lambda (closure)
     (car closure)))
 
-;; closurebody finds the body of the function from the closure
-(define closurebody
+;; functionclosurebody finds the body of the function from the closure
+(define functionclosurebody
   (lambda (closure)
     (cadr closure)))
 
-;; closurestate finds the state in scope for a function call from the closure
-(define closurestate
-  (lambda (closure funcname state)
-    ((caddr closure) funcname (vars-list-all state) (values-list-all state))))
+;; functionclosurestate finds the state in scope for a function call from the closure
+(define functionclosurestate
+  (lambda (funcclosure funcname classclosure)
+    ((caddr funcclosure) (class-vars-list classclosure) (class-init-values-list classclosure) (class-funcnames-list classclosure) (class-funcclosures-list classclosure))))
 
 ;; newnextlambda returns a base lambda function for the next continuation
 (define newnextlambda
@@ -665,7 +744,7 @@
 ;; values-list finds the list of values in the current layer of the state
 (define values-list
   (lambda (state)
-    (if (null? vars-list)
+    (if (null? state)
         state
         (cadar state))))
 
@@ -675,6 +754,48 @@
     (if (null? state)
         state
         (append (values-list state) (values-list-all (removelayer state))))))
+
+;; class-vars-list
+(define class-vars-list
+  (lambda (classclosure)
+    (if (null? classclosure)
+        (error 'novar "Class closure not defined")
+        (cadr classclosure))))
+
+;; class-init-values-list
+(define class-init-values-list
+  (lambda (classclosure)
+    (if (null? classclosure)
+        (error 'novar "Class closure not defined")
+        (caddr classclosure))))
+
+;; class-funcnames-list
+(define class-funcnames-list
+  (lambda (classclosure)
+    (if (null? classclosure)
+        (error 'novar "Class closure not defined")
+        (cadddr classclosure))))
+
+;; class-funcclosures-list
+(define class-funcclosures-list
+  (lambda (classclosure)
+    (if (null? classclosure)
+        (error 'novar "Class closure not defined")
+        (car (cddddr classclosure)))))
+
+;; class-names-list
+(define class-names-list
+  (lambda (classes)
+    (if (null? classes)
+        (error 'noclasses "No classes defined")
+        (caar classes))))
+
+;; class-values-list
+(define class-closures-list
+  (lambda (classes)
+    (if (null? vars-list)
+        (error 'noclasses "No classes defined")
+        (cadar classes))))
 
 ;; first-value finds the first value in the values list from the from the given values-list
 (define first-value
