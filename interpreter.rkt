@@ -19,12 +19,12 @@
               (newthrowlambda)
               mainclassname)))
 
-;; evaluate searches a parse tree and returns the return value
+;; evaluate sets the classes before the main function is run
 (define evaluate
   (lambda (tree state break continue return throw mainclassname)
-          (run tree (setclasses tree state throw)  mainclassname state break continue return throw))) ; (evaluate (restof tree)
+          (run tree (setclasses tree state throw)  mainclassname state break continue return throw)))
 
-;; run
+;; run searches a parse tree and returns the return value
 (define run
   (lambda (tree classes mainclassname state break continue return throw)
     (returnvalue (Mstate (makeinstanceclosure mainclassname (class-init-values-list (getclassclosure mainclassname (class-names-list classes) (class-closures-list classes)))) classes mainclassname
@@ -89,7 +89,7 @@
             (values-list state))] ; returns the value that was assigned to the specified variable
       ; new object
       [(eq? (operator exp) 'new) (makeinstanceclosure (runtimetype exp) (class-init-values-list (getclassclosure (runtimetype exp) (class-names-list classes) (class-closures-list classes))))]
-      ;; dot operator
+      ; dot operator
       [(and (eq? (operator exp) 'dot) (eq? (leftoperand exp) 'super)) (Mvalue (Mvalue this classes (superclass (getclassclosure (classname this) (class-names-list classes) (class-closures-list classes))) (leftoperand exp) state throw) classes
                                                                       (superclass (getclassclosure (classname this) (class-names-list classes) (class-closures-list classes))) (rightoperand exp) state throw)]
       [(eq? (operator exp) 'dot) (Mvalue (Mvalue this classes (runtimetype exp) (leftoperand exp) state throw) classes (runtimetype exp) (rightoperand exp) state throw)] 
@@ -168,7 +168,7 @@
        state]
       [(eq? 'function (operator exp)) (next (assign (functionname exp)
        (makefuncclosure currtype (formalparams exp) (funcbody exp)) (declare (functionname exp) state)))]
-      ; dot
+      ; dot operator
       [(and (eq? (operator exp) 'dot) (eq? (leftoperand exp) 'super)) (Mstate (Mvalue this classes (superclass (getclassclosure (classname this) (class-names-list classes) (class-closures-list classes))) (leftoperand exp) state throw) classes
                                                                       (superclass (getclassclosure (classname this) (class-names-list classes) (class-closures-list classes))) (rightoperand exp) state next break continue return throw)]
       [(eq? (operator exp) 'dot) (Mstate (Mvalue this classes (runtimetype exp) (leftoperand exp) state throw) classes (runtimetype exp) (rightoperand exp) state next break continue return throw)]
@@ -178,12 +178,9 @@
        (getclassclosure (classname this) (class-names-list classes) (class-closures-list classes))) (class-funcclosures-list (getclassclosure (classname this) (class-names-list classes) (class-closures-list classes)))) (actualparams exp) state next throw)]
       [else (error 'badstate "Bad state")])))
 
-;; getinstance
-;; 
-
 ;;;; Helper Functions--------------------------------------------------
 
-;; getclassclosure
+;; getclassclosure gets the class closure of the input class name
 (define getclassclosure
   (lambda (classname class-names-list class-closures-list)
      (cond
@@ -193,12 +190,15 @@
       [(eq? (first-variable class-names-list) classname) (unbox (first-value class-closures-list))]
       [else (getclassclosure classname (restof class-names-list) (restof class-closures-list))])))
 
-;; makeclassclosure
+;; makeclassclosure makes a class closure
+;; The class closure is: The superclass (if any), the list of instance variables, the initial values for
+;; those variables, and the function names and closures for functions in the class
 (define makeclassclosure
   (lambda (superclass instancevarslist instanceinitvalslist funcnameslist funcclosureslist)
     (list superclass instancevarslist instanceinitvalslist funcnameslist funcclosureslist)))
 
-;; makeinstanceclosure
+;; makeinstanceclosure makes an instance closure
+;; The instance closure is: The runtime type and the values of the instance variables
 (define makeinstanceclosure
   (lambda (runtimetype instancevalslist)
     (list 'instanceclosure runtimetype instancevalslist)))
@@ -239,7 +239,6 @@
       [(eq? (first-variable vars-list) exp) #t]
       [else (var? exp (restof vars-list))])))
     
-
 ;; valueof searches through the current scope and returns the associated value of a given var
 (define valueof
   (lambda (exp vars-list values-list)
@@ -259,7 +258,7 @@
       [(eq? (first-variable vars-list) var) (cons (setbox (first-value values-list) val) (restof values-list))]
       [else (cons (first-value values-list) (setvalue var val (restof vars-list) (restof values-list)))])))
 
-;; setclasses
+;; setclasses finds all of the classes in the file and creates their closures
 (define setclasses
   (lambda (tree state throw)
     (cond
@@ -295,7 +294,7 @@
       [else (error 'badexp "Invalid operation in class definition")])))
 
 ;; makefuncclosure creates a closure from a given function
-;; The closure is: The function name, the function body, and the state in scope
+;; The function closure is: The function name, the function body, and the state in scope
 (define makefuncclosure
   (lambda (currtype formalparams body)
     (list formalparams body (lambda (vars vals fnl fcl) (returnfuncstate vars vals fnl fcl)) currtype)))
@@ -349,44 +348,44 @@
 
 ;;;; Abstractions----------------------------------------------------------
 
-;; makefuncall
+;; makefuncall creates a new function call using the appropriate class for a dot expression
 (define makefuncall
   (lambda (exp)
     (append (list 'funcall (rightoperand (leftoperand exp))) (cddr exp))))
 
-;; runtimetype
+;; runtimetype finds the runtime type of an object
 (define runtimetype
   (lambda (exp)
     (cadr exp)))
 
-;; superclass
+;; superclass finds the superclass of an object
 (define superclass
   (lambda (exp)
     (if (null? (caddr exp))
         '()
         (car (cdaddr exp)))))
 
-;; instancevarslist
+;; instancevarslist finds and sets the list of instance variables from the class closure
 (define instancevarslist
   (lambda (exp state throw)
     (vars-list (setclassvars (cadddr exp) state throw))))
 
-;; instanceinitvalslist
+;; instanceinitvalslist finds and sets the list of initial instance field values from the class closure
 (define instanceinitvalslist
   (lambda (exp state throw)
     (values-list (setclassvars (cadddr exp) state throw))))
 
-;; funcnameslist
+;; funcnameslist finds and sets the list of function names from the class closure
 (define funcnameslist
   (lambda (currtype exp state throw)
     (vars-list (setclassfunctions currtype (cadddr exp) state throw))))
 
-;; funcclosureslist
+;; funcclosureslist finds and sets the list of function closures from the class closure
 (define funcclosureslist
   (lambda (currtype exp state throw)
     (values-list (setclassfunctions currtype (cadddr exp) state throw))))
 
-;; classname
+;; classname finds the name of the class from an expression
 (define classname
   (lambda (exp)
     (cadr exp)))
@@ -436,7 +435,7 @@
   (lambda (funcclosure funcname classclosure)
     ((caddr funcclosure) (class-vars-list classclosure) (class-init-values-list classclosure) (class-funcnames-list classclosure) (class-funcclosures-list classclosure))))
 
-;; classtype
+;; classtype finds the type of a class
 (define classtype
   (lambda (closure)
     (cadddr closure)))
@@ -784,42 +783,42 @@
         state
         (append (values-list state) (values-list-all (removelayer state))))))
 
-;; class-vars-list
+;; class-vars-list finds the list of variables from the class closure
 (define class-vars-list
   (lambda (classclosure)
     (if (null? classclosure)
         (error 'novar "Class closure not defined")
         (cadr classclosure))))
 
-;; class-init-values-list
+;; class-init-values-list finds the list of initial values from the class closure
 (define class-init-values-list
   (lambda (classclosure)
     (if (null? classclosure)
         (error 'novar "Class closure not defined")
         (caddr classclosure))))
 
-;; class-funcnames-list
+;; class-funcnames-list finds the list of function names from the class closure
 (define class-funcnames-list
   (lambda (classclosure)
     (if (null? classclosure)
         (error 'novar "Class closure not defined")
         (cadddr classclosure))))
 
-;; class-funcclosures-list
+;; class-funcclosures-list finds the list of function closures from the class closure
 (define class-funcclosures-list
   (lambda (classclosure)
     (if (null? classclosure)
         (error 'novar "Class closure not defined")
         (car (cddddr classclosure)))))
 
-;; class-names-list
+;; class-names-list finds the names of all classes
 (define class-names-list
   (lambda (classes)
     (if (null? classes)
         (error 'noclasses "No classes defined")
         (caar classes))))
 
-;; class-values-list
+;; class-values-list finds the closures of all classes
 (define class-closures-list
   (lambda (classes)
     (if (null? vars-list)
