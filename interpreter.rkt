@@ -42,8 +42,8 @@
       [(number? exp) exp]
       [(eq? 'true exp) #t]
       [(eq? 'false exp) #f]
-      [(and (not (list? exp)) (var? exp (vars-list-all state)))
-            (valueof exp (vars-list-all state) (values-list-all state))] ; checks if expression is a variable
+      [(and (not (list? exp)) (var? exp (vars-list-all state) (class-vars-list (getclassclosure currtype (class-names-list classes) (class-closures-list classes)))))
+            (valueof exp (vars-list-all state) (class-vars-list (getclassclosure currtype (class-names-list classes) (class-closures-list classes))) (values-list-all state) (instance-vals-list this) (class-init-values-list (getclassclosure currtype (class-names-list classes) (class-closures-list classes))))] ; checks if expression is a variable
       [(not (list? exp)) (error 'novar "Variable not declared")]
       [(null? exp) exp]
       ; mathematical operators
@@ -84,17 +84,17 @@
       [(and (eq? (operator exp) '!) (boolean? (Mvalue this classes currtype (leftoperand exp) state throw)))
        (not (Mvalue this classes currtype (leftoperand exp) state throw))]
       ; assign
-      [(eq? (operator exp) '=) (valueof (leftoperand exp) (vars-list (assign (varname exp)
-            (Mvalue this classes currtype (val exp) state throw) state))
-            (values-list state))] ; returns the value that was assigned to the specified variable
+      [(eq? (operator exp) '=) (valueof (leftoperand exp) (vars-list (assign currtype classes (varname exp)
+            (Mvalue this classes currtype (val exp) state throw) state)) (class-vars-list (getclassclosure currtype (class-names-list classes) (class-closures-list classes)))
+            (values-list state) (instance-vals-list this) (class-init-values-list (getclassclosure currtype (class-names-list classes) (class-closures-list classes))))] ; returns the value that was assigned to the specified variable
       ; new object
       [(eq? (operator exp) 'new) (makeinstanceclosure (runtimetype exp) (class-init-values-list (getclassclosure (runtimetype exp) (class-names-list classes) (class-closures-list classes))))]
       ;; dot operator
       [(and (eq? (operator exp) 'dot) (eq? (leftoperand exp) 'super)) (Mvalue (Mvalue this classes (superclass (getclassclosure (classname this) (class-names-list classes) (class-closures-list classes))) (leftoperand exp) state throw) classes
                                                                       (superclass (getclassclosure (classname this) (class-names-list classes) (class-closures-list classes))) (rightoperand exp) state throw)]
-      [(eq? (operator exp) 'dot) (Mvalue (Mvalue this classes (runtimetype exp) (leftoperand exp) state throw) classes (runtimetype exp) (rightoperand exp) state throw)] 
+      [(eq? (operator exp) 'dot) (Mvalue (Mvalue this classes currtype (leftoperand exp) state throw) classes currtype (rightoperand exp) state throw)] 
       ; function calls
-      [(and (eq? (operator exp) 'funcall) (list? (leftoperand exp))) (Mvalue (Mvalue this classes (runtimetype exp) (leftoperand (leftoperand exp)) state throw) classes (runtimetype (leftoperand exp)) (makefuncall exp) state throw)]
+      [(and (eq? (operator exp) 'funcall) (list? (leftoperand exp))) (Mvalue (Mvalue this classes currtype (leftoperand (leftoperand exp)) state throw) classes currtype (makefuncall exp) state throw)]
       [(eq? (operator exp) 'funcall) (Mvalue this classes currtype (returnvalue (callfunctionvalue this classes currtype (functionname exp)
        (getfunctionclosure (functionname exp) (class-funcnames-list (getclassclosure (classname this) (class-names-list classes) (class-closures-list classes)))
        (class-funcclosures-list (getclassclosure (classname this) (class-names-list classes) (class-closures-list classes)))) (actualparams exp) state throw)) state throw)]
@@ -108,14 +108,14 @@
       [(number? exp) state]
       [(eq? 'true exp) state]
       [(eq? 'false exp) state]
-      [(and (not (list? exp)) (var? exp (vars-list-all state))) state] ; checks if expression is a variable
+      [(and (not (list? exp)) (var? exp (vars-list-all state) (class-vars-list (getclassclosure currtype (class-names-list classes) (class-closures-list classes))))) state] ; checks if expression is a variable
       [(not (list? exp)) (error 'novar "Variable not declared")]
       [(null? exp) (next state)]
       [(and (eq? (operator exp) 'var) (null? (Mvalue this classes currtype (val exp) state throw)))
-            (next (declare (varname exp) state))] ; no value specified (only varname)
-      [(eq? (operator exp) 'var) (next (assign (varname exp)
-            (Mvalue this classes currtype (val exp) state throw) (declare (varname exp) state)))]
-      [(eq? (operator exp) '=) (next (assign (varname exp)
+            (next (declare currtype classes (varname exp) state))] ; no value specified (only varname)
+      [(eq? (operator exp) 'var) (next (assign currtype classes (varname exp)
+            (Mvalue this classes currtype (val exp) state throw) (declare currtype classes (varname exp) state)))]
+      [(eq? (operator exp) '=) (next (assign currtype classes (varname exp)
             (Mvalue this classes currtype (val exp) state throw) state))]
       ; block
       [(eq? (operator exp) 'begin) (Mstate this classes currtype (firstexp (restof exp)) (addnewlayer state)
@@ -166,14 +166,14 @@
        state]
       [(and (eq? (operator exp) '!) (boolean? (Mvalue this classes currtype (leftoperand exp) state throw)))
        state]
-      [(eq? 'function (operator exp)) (next (assign (functionname exp)
-       (makefuncclosure currtype (formalparams exp) (funcbody exp)) (declare (functionname exp) state)))]
+      [(eq? 'function (operator exp)) (next (assign currtype classes (functionname exp)
+       (makefuncclosure currtype (formalparams exp) (funcbody exp)) (declare currtype classes (functionname exp) state)))]
       ; dot
       [(and (eq? (operator exp) 'dot) (eq? (leftoperand exp) 'super)) (Mstate (Mvalue this classes (superclass (getclassclosure (classname this) (class-names-list classes) (class-closures-list classes))) (leftoperand exp) state throw) classes
                                                                       (superclass (getclassclosure (classname this) (class-names-list classes) (class-closures-list classes))) (rightoperand exp) state next break continue return throw)]
-      [(eq? (operator exp) 'dot) (Mstate (Mvalue this classes (runtimetype exp) (leftoperand exp) state throw) classes (runtimetype exp) (rightoperand exp) state next break continue return throw)]
+      [(eq? (operator exp) 'dot) (Mstate (Mvalue this classes currtype (leftoperand exp) state throw) classes currtype (rightoperand exp) state next break continue return throw)]
       ; function calls
-      [(and (eq? (operator exp) 'funcall) (list? (leftoperand exp))) (Mstate (Mvalue this classes (runtimetype exp) (leftoperand (leftoperand exp)) state throw) classes (runtimetype (leftoperand exp)) (makefuncall exp) state next break continue return throw)]
+      [(and (eq? (operator exp) 'funcall) (list? (leftoperand exp))) (Mstate (Mvalue this classes currtype (leftoperand (leftoperand exp)) state throw) classes currtype (makefuncall exp) state next break continue return throw)]
       [(eq? (operator exp) 'funcall) (callfunctionstate this classes currtype (functionname exp)  (getfunctionclosure (functionname exp) (class-funcnames-list
        (getclassclosure (classname this) (class-names-list classes) (class-closures-list classes))) (class-funcclosures-list (getclassclosure (classname this) (class-names-list classes) (class-closures-list classes)))) (actualparams exp) state next throw)]
       [else (error 'badstate "Bad state")])))
@@ -206,16 +206,28 @@
 ;; declare adds a new variable to the list of variables stored in the current scope of the state and sets its value to
 ;; null; if the variable is already declared in the current layer, it will overwrite the value
 (define declare
+ (lambda (currtype classes var state)
+   (if (var? var (vars-list state) (class-vars-list (getclassclosure currtype (class-names-list classes) (class-closures-list classes))))
+     (assign currtype classes var (declaredval) state)
+     (newdeclarestate var state))))
+
+(define initdeclare
  (lambda (var state)
-   (if (var? var (vars-list state))
-     (assign var (declaredval) state)
+   (if (classvar? var (vars-list state))
+     (initassign var (declaredval) state)
      (newdeclarestate var state))))
 
 ;; assign adds a value to the values-list in the state for a corresponding variable; if the variable
 ;; is already assigned, it will overwrite the value
 (define assign
+  (lambda (currtype classes var val state)
+    (if (var? var (vars-list-all state) (class-vars-list (getclassclosure currtype (class-names-list classes) (class-closures-list classes))))
+        (newassignstate var val state)
+        (error 'badassign "Variable not declared"))))
+
+(define initassign
   (lambda (var val state)
-    (if (var? var (vars-list-all state))
+    (if (classvar? var (vars-list-all state))
         (newassignstate var val state)
         (error 'badassign "Variable not declared"))))
 
@@ -232,23 +244,49 @@
       
 ;; var? searches through the given vars-list and returns #t if the variable has been declared
 (define var?
+  (lambda (exp vars-list class-vars-list)
+    (cond
+      [(null? exp) (error 'badexp "Bad expression")]
+      [(null? vars-list) (classvar? exp class-vars-list)]
+      [(eq? (first-variable vars-list) exp) #t]
+      [else (var? exp (restof vars-list) class-vars-list)])))
+
+(define classvar?
   (lambda (exp vars-list)
     (cond
       [(null? exp) (error 'badexp "Bad expression")]
       [(null? vars-list) #f]
       [(eq? (first-variable vars-list) exp) #t]
-      [else (var? exp (restof vars-list))])))
+      [else (classvar? exp (restof vars-list))])))
     
 
 ;; valueof searches through the current scope and returns the associated value of a given var
 (define valueof
-  (lambda (exp vars-list values-list)
+  (lambda (exp local-vars-list class-vars values-list instance-vals class-vals)
     (cond
       [(null? exp) (error 'badexp "Bad expression")]
-      [(or (null? vars-list) (null? values-list)) (error 'novar "Variable not declared")]
-      [(and (eq? (first-variable vars-list) exp) (null? (unbox (first-value values-list)))) (error 'noinit "Variable was never initialized")]
-      [(eq? (first-variable vars-list) exp) (unbox (first-value values-list))]
-      [else (valueof exp (restof vars-list) (restof values-list))])))
+      [(null? local-vars-list) (instvalueof exp class-vars instance-vals class-vals)]
+      [(and (eq? (first-variable local-vars-list) exp) (null? (unbox (first-value values-list)))) (error 'noinit "Variable was never initialized")]
+      [(eq? (first-variable local-vars-list) exp) (unbox (first-value values-list))]
+      [else (valueof exp (restof local-vars-list) class-vars (restof values-list) instance-vals class-vals)])))
+
+(define instvalueof
+  (lambda (exp class-vars instance-vals class-vals)
+    (cond
+      [(null? exp) (error 'badexp "Bad expression")]
+      [(null? class-vars) (error 'nodeclare "Var not declared")]
+      [(and (eq? (first-variable class-vars) exp) (null? (unbox (first-value instance-vals)))) (classvalueof class-vars class-vals)]
+      [(eq? (first-variable class-vars) exp) (unbox (first-value instance-vals))]
+      [else (valueof exp (restof class-vars) (restof instance-vals) class-vals)])))
+
+(define classvalueof
+  (lambda (exp class-vars class-vals)
+    (cond
+      [(null? exp) (error 'badexp "Bad expression")]
+      [(null? class-vars) (error 'nodeclare "Var not declared")]
+      [(and (eq? (first-variable class-vars) exp) (null? (unbox (first-value class-vals)))) (error 'noinit "Var not initialized")]
+      [(eq? (first-variable class-vars) exp) (unbox (first-value class-vals))]
+      [else (valueof exp (restof class-vars) (restof class-vals))])))
 
 ;; setvalue assigns a value to a given var and returns the updated values-list; returns an error if the var has not been declared
 (define setvalue
@@ -264,9 +302,9 @@
   (lambda (tree state throw)
     (cond
       [(null? tree) state]
-      [(eq? 'class (operator (firstexp tree ))) (setclasses (restof tree) (assign (classname (firstexp tree))
+      [(eq? 'class (operator (firstexp tree ))) (setclasses (restof tree) (initassign (classname (firstexp tree))
        (makeclassclosure (superclass (firstexp tree)) (instancevarslist (firstexp tree) state throw) (instanceinitvalslist (firstexp tree) state throw)
-                         (funcnameslist (classname (firstexp tree)) (firstexp tree) state throw) (funcclosureslist (classname (firstexp tree)) (firstexp tree) state throw)) (declare (classname (firstexp tree)) state)) throw)]
+                         (funcnameslist (classname (firstexp tree)) (firstexp tree) state throw) (funcclosureslist (classname (firstexp tree)) (firstexp tree) state throw)) (initdeclare (classname (firstexp tree)) state)) throw)]
       [else (error 'badexp "Invalid operation when defining classes")])))
 
 ;; setclassvars declares all class variables
@@ -275,9 +313,9 @@
     (cond
       [(null? tree) state]
       [(and (eq? (operator (firstexp tree)) 'var) (null? (Mvalue (lambda () (error 'badcall "Invalid permissions")) (lambda () (error 'badcall "Invalid permissions")) (lambda () (error 'badcall "Invalid permissions")) (val (firstexp tree)) state throw)))
-            (setclassvars (restof tree) (declare (varname (firstexp tree)) state) throw)] ; no value specified (only varname)
-      [(eq? (operator (firstexp tree)) 'var) (setclassvars (restof tree) (assign (varname (firstexp tree))
-            (Mvalue (lambda () (error 'badcall "Invalid permissions")) (lambda () (error 'badcall "Invalid permissions")) (lambda () (error 'badcall "Invalid permissions")) (val (firstexp tree)) state throw) (declare (varname (firstexp tree)) state)) throw)]
+            (setclassvars (restof tree) (initdeclare (varname (firstexp tree)) state) throw)] ; no value specified (only varname)
+      [(eq? (operator (firstexp tree)) 'var) (setclassvars (restof tree) (initassign (varname (firstexp tree))
+            (Mvalue (lambda () (error 'badcall "Invalid permissions")) (lambda () (error 'badcall "Invalid permissions")) (lambda () (error 'badcall "Invalid permissions")) (val (firstexp tree)) state throw) (initdeclare (varname (firstexp tree)) state)) throw)]
       [(eq? 'function (operator (firstexp tree))) (setclassvars (restof tree) state throw)]
       [(eq? 'static-function (operator (firstexp tree))) (setclassvars (restof tree) state throw)]
       [else (error 'badexp "Invalid operation in class definition")])))
@@ -288,10 +326,10 @@
     (cond
       [(null? tree) state]
       [(eq? (operator (firstexp tree)) 'var) (setclassfunctions currtype (restof tree) state throw)]
-      [(eq? 'static-function (operator (firstexp tree))) (setclassfunctions currtype (restof tree) (assign (functionname (firstexp tree))
-       (makefuncclosure currtype (formalparams (firstexp tree)) (funcbody (firstexp tree))) (declare (functionname (firstexp tree)) state)) throw)]
-      [(eq? 'function (operator (firstexp tree))) (setclassfunctions currtype (restof tree) (assign (functionname (firstexp tree))
-       (makefuncclosure currtype (formalparams (firstexp tree)) (funcbody (firstexp tree))) (declare (functionname (firstexp tree)) state)) throw)]
+      [(eq? 'static-function (operator (firstexp tree))) (setclassfunctions currtype (restof tree) (initassign (functionname (firstexp tree))
+       (makefuncclosure currtype (formalparams (firstexp tree)) (funcbody (firstexp tree))) (initdeclare (functionname (firstexp tree)) state)) throw)]
+      [(eq? 'function (operator (firstexp tree))) (setclassfunctions currtype (restof tree) (initassign (functionname (firstexp tree))
+       (makefuncclosure currtype (formalparams (firstexp tree)) (funcbody (firstexp tree))) (initdeclare (functionname (firstexp tree)) state)) throw)]
       [else (error 'badexp "Invalid operation in class definition")])))
 
 ;; makefuncclosure creates a closure from a given function
@@ -343,9 +381,9 @@
 (define bindparams
   (lambda (this classes currtype fp ap fstate state throw)
     (cond
-      [(and (null? fp) (null? ap)) (assign 'this this (declare 'this fstate))]
+      [(and (null? fp) (null? ap)) (assign currtype classes 'this this (declare currtype classes 'this fstate))]
       [(or (null? fp) (null? ap)) (error 'mismatcharguments "The number of arguments expected did not match the number of arguments given")]
-      [else (bindparams this classes currtype (restof fp) (restof ap) (assign (first-param fp) (Mvalue this classes currtype (first-param ap) state throw) (declare (first-param fp) fstate)) state throw)])))
+      [else (bindparams this classes currtype (restof fp) (restof ap) (assign currtype classes (first-param fp) (Mvalue this classes currtype (first-param ap) state throw) (declare currtype classes (first-param fp) fstate)) state throw)])))
 
 ;;;; Abstractions----------------------------------------------------------
 
@@ -565,12 +603,12 @@
               (lambda (s1) (throw s1 e)) (lambda (s1) (throw s1 e)) (lambda (s1) (throw s1 e))
               (lambda (v) (throw s e)) throw)]
         [(null? (finallyblock exp))
-         (Mstate this classes currtype (catchblock exp) (assign (catchvar exp) (Mvalue this classes currtype e s throw)
-         (declare (catchvar exp) s)) (trynext this  classes currtype exp next break continue return throw)
+         (Mstate this classes currtype (catchblock exp) (assign currtype classes (catchvar exp) (Mvalue this classes currtype e s throw)
+         (declare currtype classes (catchvar exp) s)) (trynext this  classes currtype exp next break continue return throw)
          (trybreak this classes currtype exp break continue return throw) (trycontinue this classes currtype exp break continue return throw)
          (tryreturn this  classes currtype exp next break continue return throw) throw)]
-        [else (Mstate this classes currtype (catchblock exp) (assign (catchvar exp) (Mvalue this classes currtype e s throw)
-              (declare (catchvar exp) s)) (trynext this  classes currtype exp next break continue return throw)
+        [else (Mstate this classes currtype (catchblock exp) (assign currtype classes (catchvar exp) (Mvalue this classes currtype e s throw)
+              (declare currtype classes (catchvar exp) s)) (trynext this  classes currtype exp next break continue return throw)
               (trybreak this classes currtype exp break continue return throw) (trycontinue this classes currtype exp break continue return throw)
               (tryreturn this  classes currtype exp next break continue return throw)
               (lambda (s1 e1) (Mstate this classes currtype (finallyblock exp) s1
@@ -706,7 +744,7 @@
       [(null? var) (error 'badexp "Bad expression")]
       [(null? state) (error 'novar "Variable not declared")]
       [(not (list? (car state))) (error 'novar "Variable not declared")]
-      [(var? var (vars-list state)) (cons (list (vars-list state) (setvalue var val (vars-list state) (values-list state))) (restof state))]
+      [(classvar? var (vars-list state)) (cons (list (vars-list state) (setvalue var val (vars-list state) (values-list state))) (restof state))]
       [else (cons (currentlayer state) (newassignstate var val (restof state)))])))
 
 ;; setbox destructively sets the value in box b to value v
@@ -825,6 +863,11 @@
     (if (null? vars-list)
         (error 'noclasses "No classes defined")
         (cadar classes))))
+
+;; instance-vals-list
+(define instance-vals-list
+  (lambda (closure)
+    (cdr closure)))
 
 ;; first-value finds the first value in the values list from the from the given values-list
 (define first-value
