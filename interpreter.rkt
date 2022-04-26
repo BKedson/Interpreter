@@ -90,9 +90,14 @@
       ; new object
       [(eq? (operator exp) 'new) (makeinstanceclosure (runtimetype exp) (class-init-values-list (getclassclosure (runtimetype exp) (class-names-list classes) (class-closures-list classes))))]
       ;; dot operator
-      [(eq? (operator exp) 'dot) (Mvalue (Mvalue this classes (runtimetype exp) (leftoperand exp) state throw) classes currtype (rightoperand exp) state throw)] 
+      [(and (eq? (operator exp) 'dot) (eq? (leftoperand exp) 'super)) (Mvalue (Mvalue this classes (superclass (getclassclosure (classname this) (class-names-list classes) (class-closures-list classes))) (leftoperand exp) state throw) classes
+                                                                      (superclass (getclassclosure (classname this) (class-names-list classes) (class-closures-list classes))) (rightoperand exp) state throw)]
+      [(eq? (operator exp) 'dot) (Mvalue (Mvalue this classes (runtimetype exp) (leftoperand exp) state throw) classes (runtimetype exp) (rightoperand exp) state throw)] 
       ; function calls
-      [(eq? (operator exp) 'funcall) (Mvalue this classes currtype (returnvalue (callfunctionvalue this classes currtype (functionname exp) (getfunctionclosure (functionname exp) (vars-list-all state) (values-list-all state)) (actualparams exp) state throw)) state throw)]
+      [(and (eq? (operator exp) 'funcall) (list? (leftoperand exp))) (Mvalue (Mvalue this classes (runtimetype exp) (leftoperand (leftoperand exp)) state throw) classes (runtimetype (leftoperand exp)) (makefuncall exp) state throw)]
+      [(eq? (operator exp) 'funcall) (Mvalue this classes currtype (returnvalue (callfunctionvalue this classes currtype (functionname exp)
+       (getfunctionclosure (functionname exp) (class-funcnames-list (getclassclosure (classname this) (class-names-list classes) (class-closures-list classes)))
+       (class-funcclosures-list (getclassclosure (classname this) (class-names-list classes) (class-closures-list classes)))) (actualparams exp) state throw)) state throw)]
       [(eq? (operator exp) 'throw) (throw state (Mvalue this classes currtype (throwval exp) state throw))]
       [else (error 'badexp "Bad expression")])))
 
@@ -164,9 +169,13 @@
       [(eq? 'function (operator exp)) (next (assign (functionname exp)
        (makefuncclosure currtype (formalparams exp) (funcbody exp)) (declare (functionname exp) state)))]
       ; dot
-      [(eq? (operator exp) 'dot) (Mstate (Mvalue this classes (runtimetype exp) (leftoperand exp) state throw))]
+      [(and (eq? (operator exp) 'dot) (eq? (leftoperand exp) 'super)) (Mstate (Mvalue this classes (superclass (getclassclosure (classname this) (class-names-list classes) (class-closures-list classes))) (leftoperand exp) state throw) classes
+                                                                      (superclass (getclassclosure (classname this) (class-names-list classes) (class-closures-list classes))) (rightoperand exp) state next break continue return throw)]
+      [(eq? (operator exp) 'dot) (Mstate (Mvalue this classes (runtimetype exp) (leftoperand exp) state throw) classes (runtimetype exp) (rightoperand exp) state next break continue return throw)]
       ; function calls
-      [(eq? (operator exp) 'funcall) (callfunctionstate this classes currtype (functionname exp) (getfunctionclosure (functionname exp) (vars-list-all state) (values-list-all state)) (actualparams exp) state next throw)]
+      [(and (eq? (operator exp) 'funcall) (list? (leftoperand exp))) (Mstate (Mvalue this classes (runtimetype exp) (leftoperand (leftoperand exp)) state throw) classes (runtimetype (leftoperand exp)) (makefuncall exp) state next break continue return throw)]
+      [(eq? (operator exp) 'funcall) (callfunctionstate this classes currtype (functionname exp)  (getfunctionclosure (functionname exp) (class-funcnames-list
+       (getclassclosure (classname this) (class-names-list classes) (class-closures-list classes))) (class-funcclosures-list (getclassclosure (classname this) (class-names-list classes) (class-closures-list classes)))) (actualparams exp) state next throw)]
       [else (error 'badstate "Bad state")])))
 
 ;; getinstance
@@ -265,10 +274,10 @@
   (lambda (tree state throw)
     (cond
       [(null? tree) state]
-      [(and (eq? (operator (firstexp tree)) 'var) (null? (Mvalue (error 'badcall "Invalid permissions") (error 'badcall "Invalid permissions") (error 'badcall "Invalid permissions") (val (firstexp tree)) state throw)))
-            (setclassvars (restof tree) (declare (varname (firstexp tree) state)) throw)] ; no value specified (only varname)
+      [(and (eq? (operator (firstexp tree)) 'var) (null? (Mvalue (lambda () (error 'badcall "Invalid permissions")) (lambda () (error 'badcall "Invalid permissions")) (lambda () (error 'badcall "Invalid permissions")) (val (firstexp tree)) state throw)))
+            (setclassvars (restof tree) (declare (varname (firstexp tree)) state) throw)] ; no value specified (only varname)
       [(eq? (operator (firstexp tree)) 'var) (setclassvars (restof tree) (assign (varname (firstexp tree))
-            (Mvalue (error 'badcall "Invalid permissions") (error 'badcall "Invalid permissions") (error 'badcall "Invalid permissions") (val (firstexp tree)) state throw) (declare (varname (firstexp tree)) state)) throw)]
+            (Mvalue (lambda () (error 'badcall "Invalid permissions")) (lambda () (error 'badcall "Invalid permissions")) (lambda () (error 'badcall "Invalid permissions")) (val (firstexp tree)) state throw) (declare (varname (firstexp tree)) state)) throw)]
       [(eq? 'function (operator (firstexp tree))) (setclassvars (restof tree) state throw)]
       [(eq? 'static-function (operator (firstexp tree))) (setclassvars (restof tree) state throw)]
       [else (error 'badexp "Invalid operation in class definition")])))
@@ -310,8 +319,8 @@
 ;; callfunctionvalue finds the output of a function; returns an error if no return value is given
 (define callfunctionvalue
   (lambda (this classes currtype funcname closure actualparams state throw)
-    (Mstate this classes currtype (functionclosurebody closure) (bindparams this classes currtype (closurefp closure) actualparams
-            (addnewlayer (functionclosurestate closure funcname state)) state throw)
+    (Mstate this classes (classtype closure) (functionclosurebody closure) (bindparams this classes currtype (closurefp closure) actualparams
+            (addnewlayer (functionclosurestate closure funcname (getclassclosure (classtype closure) (class-names-list classes) (class-closures-list classes)))) state throw)
      (lambda (s) (error 'noreturn "no return statement"))
      (newbreaklambda)
      (newcontinuelambda)
@@ -321,8 +330,8 @@
 ;; callfunctionstate finds the state resulting from a run of a function
 (define callfunctionstate
   (lambda (this classes currtype funcname closure actualparams state next throw)
-    (Mstate this classes currtype (functionclosurebody closure) (bindparams this classes currtype (closurefp closure) actualparams
-            (addnewlayer (functionclosurestate closure funcname state)) state throw)
+    (Mstate this classes (classtype closure) (functionclosurebody closure) (bindparams this classes currtype (closurefp closure) actualparams
+            (addnewlayer (functionclosurestate closure funcname (getclassclosure (classtype closure) (class-names-list classes) (class-closures-list classes)))) state throw)
      (lambda (s) (next state))
      (newbreaklambda)
      (newcontinuelambda)
@@ -336,9 +345,14 @@
     (cond
       [(and (null? fp) (null? ap)) (assign 'this this (declare 'this fstate))]
       [(or (null? fp) (null? ap)) (error 'mismatcharguments "The number of arguments expected did not match the number of arguments given")]
-      [else (bindparams classes currtype (restof fp) (restof ap) (assign (first-param fp) (Mvalue this classes currtype (first-param ap) state throw) (declare (first-param fp) fstate)) state throw)])))
+      [else (bindparams this classes currtype (restof fp) (restof ap) (assign (first-param fp) (Mvalue this classes currtype (first-param ap) state throw) (declare (first-param fp) fstate)) state throw)])))
 
 ;;;; Abstractions----------------------------------------------------------
+
+;; makefuncall
+(define makefuncall
+  (lambda (exp)
+    (append (list 'funcall (rightoperand (leftoperand exp))) (cddr exp))))
 
 ;; runtimetype
 (define runtimetype
@@ -421,6 +435,11 @@
 (define functionclosurestate
   (lambda (funcclosure funcname classclosure)
     ((caddr funcclosure) (class-vars-list classclosure) (class-init-values-list classclosure) (class-funcnames-list classclosure) (class-funcclosures-list classclosure))))
+
+;; classtype
+(define classtype
+  (lambda (closure)
+    (cadddr closure)))
 
 ;; newnextlambda returns a base lambda function for the next continuation
 (define newnextlambda
