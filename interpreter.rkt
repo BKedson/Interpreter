@@ -27,15 +27,17 @@
 ;; run
 (define run
   (lambda (tree classes mainclassname state break continue return throw)
-    (returnvalue (Mstate classes mainclassname (findmain (class-funcnames-list (getclassclosure mainclassname (class-names-list classes) (class-closures-list classes))) (class-funcclosures-list (getclassclosure mainclassname (class-names-list classes) (class-closures-list classes))))
-                         (functionclosurestate (getfunctionclosure 'main (class-funcnames-list (getclassclosure mainclassname (class-names-list classes) (class-closures-list classes))) (class-funcclosures-list (getclassclosure mainclassname (class-names-list classes) (class-closures-list classes)))) 'main (getclassclosure mainclassname (class-names-list classes) (class-closures-list classes)))
-                         (newnextlambda classes mainclassname tree break continue return throw) break continue return throw))))
+    (returnvalue (Mstate (makeinstanceclosure mainclassname (class-init-values-list (getclassclosure mainclassname (class-names-list classes) (class-closures-list classes)))) classes mainclassname
+                         (findmain (class-funcnames-list (getclassclosure mainclassname (class-names-list classes) (class-closures-list classes))) (class-funcclosures-list (getclassclosure mainclassname (class-names-list classes) (class-closures-list classes))))
+                         (functionclosurestate (getfunctionclosure 'main (class-funcnames-list (getclassclosure mainclassname (class-names-list classes) (class-closures-list classes))) (class-funcclosures-list (getclassclosure mainclassname (class-names-list classes) (class-closures-list classes))))
+                                               'main (getclassclosure mainclassname (class-names-list classes) (class-closures-list classes)))
+                         (newnextlambda (makeinstanceclosure mainclassname (class-init-values-list (getclassclosure mainclassname (class-names-list classes) (class-closures-list classes)))) classes mainclassname tree break continue return throw) break continue return throw))))
 
 ;;;; Mappings-------------------------------------------------------------
 
 ;; Mvalue takes an expression and finds the value of that expression
 (define Mvalue
-  (lambda (classes currtype exp state throw)
+  (lambda (this classes currtype exp state throw)
     (cond
       [(number? exp) exp]
       [(eq? 'true exp) #t]
@@ -46,55 +48,57 @@
       [(null? exp) exp]
       ; mathematical operators
       [(and (eq? (operator exp) '-) (null? (rightoperand exp)))
-            (- (Mvalue classes currtype (leftoperand exp) state throw))] ; unary minus
-      [(eq? (operator exp) '-) (- (Mvalue classes currtype (leftoperand exp) state throw)
-            (Mvalue classes currtype (rightoperand exp) state throw))]
-      [(eq? (operator exp) '+) (+ (Mvalue classes currtype (leftoperand exp) state throw)
-            (Mvalue classes currtype (rightoperand exp) state throw))]
-      [(eq? (operator exp) '*) (* (Mvalue classes currtype (leftoperand exp) state throw)
-            (Mvalue classes currtype (rightoperand exp) state throw))]
-      [(eq? (operator exp) '/) (quotient (Mvalue classes currtype (leftoperand exp) state throw)
-            (Mvalue classes currtype (rightoperand exp) state throw))]
-      [(eq? (operator exp) '%) (remainder (Mvalue classes currtype (leftoperand exp) state throw)
-            (Mvalue classes currtype (rightoperand exp) state throw))]
+            (- (Mvalue this classes currtype (leftoperand exp) state throw))] ; unary minus
+      [(eq? (operator exp) '-) (- (Mvalue this classes currtype (leftoperand exp) state throw)
+            (Mvalue this classes currtype (rightoperand exp) state throw))]
+      [(eq? (operator exp) '+) (+ (Mvalue this classes currtype (leftoperand exp) state throw)
+            (Mvalue this classes currtype (rightoperand exp) state throw))]
+      [(eq? (operator exp) '*) (* (Mvalue this classes currtype (leftoperand exp) state throw)
+            (Mvalue this classes currtype (rightoperand exp) state throw))]
+      [(eq? (operator exp) '/) (quotient (Mvalue this classes currtype (leftoperand exp) state throw)
+            (Mvalue this classes currtype (rightoperand exp) state throw))]
+      [(eq? (operator exp) '%) (remainder (Mvalue this classes currtype (leftoperand exp) state throw)
+            (Mvalue this classes currtype (rightoperand exp) state throw))]
       ; comparison operators
-      [(eq? (operator exp) '==) (eq? (Mvalue classes currtype (leftoperand exp) state throw)
-            (Mvalue classes currtype (rightoperand exp) state throw))]
-      [(eq? (operator exp) '!=) (not (eq? (Mvalue classes currtype (leftoperand exp) state throw)
-            (Mvalue classes currtype (rightoperand exp) state throw)))]
-      [(eq? (operator exp) '<) (< (Mvalue classes currtype (leftoperand exp) state throw)
-            (Mvalue classes currtype (rightoperand exp) state throw))]
-      [(eq? (operator exp) '>) (> (Mvalue classes currtype (leftoperand exp) state throw)
-            (Mvalue classes currtype (rightoperand exp) state throw))]
-      [(eq? (operator exp) '<=) (<= (Mvalue classes currtype (leftoperand exp) state throw)
-            (Mvalue classes currtype (rightoperand exp) state throw))]
-      [(eq? (operator exp) '>=) (>= (Mvalue classes currtype (leftoperand exp) state throw)
-            (Mvalue classes currtype (rightoperand exp) state throw))]
+      [(eq? (operator exp) '==) (eq? (Mvalue this classes currtype (leftoperand exp) state throw)
+            (Mvalue this classes currtype (rightoperand exp) state throw))]
+      [(eq? (operator exp) '!=) (not (eq? (Mvalue this classes currtype (leftoperand exp) state throw)
+            (Mvalue this classes currtype (rightoperand exp) state throw)))]
+      [(eq? (operator exp) '<) (< (Mvalue this classes currtype (leftoperand exp) state throw)
+            (Mvalue this classes currtype (rightoperand exp) state throw))]
+      [(eq? (operator exp) '>) (> (Mvalue this classes currtype (leftoperand exp) state throw)
+            (Mvalue this classes currtype (rightoperand exp) state throw))]
+      [(eq? (operator exp) '<=) (<= (Mvalue this classes currtype (leftoperand exp) state throw)
+            (Mvalue this classes currtype (rightoperand exp) state throw))]
+      [(eq? (operator exp) '>=) (>= (Mvalue this classes currtype (leftoperand exp) state throw)
+            (Mvalue this classes currtype (rightoperand exp) state throw))]
       ; boolean operators
-      [(and (eq? (operator exp) '&&) (boolean? (Mvalue classes currtype (leftoperand exp) state throw))
-            (boolean? (Mvalue classes currtype (rightoperand exp) state throw)))
-       (and (Mvalue classes currtype (leftoperand exp) state throw)
-            (Mvalue classes currtype (rightoperand exp) state throw))]
-      [(and (eq? (operator exp) '||) (boolean? (Mvalue classes currtype (leftoperand exp) state throw))
-            (boolean? (Mvalue classes currtype (rightoperand exp) state throw)))
-       (or (Mvalue classes currtype (leftoperand exp) state throw)
-           (Mvalue classes currtype (rightoperand exp) state throw))]
-      [(and (eq? (operator exp) '!) (boolean? (Mvalue classes currtype (leftoperand exp) state throw)))
-       (not (Mvalue classes currtype (leftoperand exp) state throw))]
+      [(and (eq? (operator exp) '&&) (boolean? (Mvalue this classes currtype (leftoperand exp) state throw))
+            (boolean? (Mvalue this classes currtype (rightoperand exp) state throw)))
+       (and (Mvalue this classes currtype (leftoperand exp) state throw)
+            (Mvalue this classes currtype (rightoperand exp) state throw))]
+      [(and (eq? (operator exp) '||) (boolean? (Mvalue this classes currtype (leftoperand exp) state throw))
+            (boolean? (Mvalue this classes currtype (rightoperand exp) state throw)))
+       (or (Mvalue this classes currtype (leftoperand exp) state throw)
+           (Mvalue this classes currtype (rightoperand exp) state throw))]
+      [(and (eq? (operator exp) '!) (boolean? (Mvalue this classes currtype (leftoperand exp) state throw)))
+       (not (Mvalue this classes currtype (leftoperand exp) state throw))]
       ; assign
       [(eq? (operator exp) '=) (valueof (leftoperand exp) (vars-list (assign (varname exp)
-            (Mvalue classes currtype (val exp) state throw) state))
+            (Mvalue this classes currtype (val exp) state throw) state))
             (values-list state))] ; returns the value that was assigned to the specified variable
       ; new object
       [(eq? (operator exp) 'new) (makeinstanceclosure (runtimetype exp) (class-init-values-list (getclassclosure (runtimetype exp) (class-names-list classes) (class-closures-list classes))))]
+      ;; dot operator
+      [(eq? (operator exp) 'dot) (Mvalue (Mvalue this classes (runtimetype exp) (leftoperand exp) state throw) classes currtype (rightoperand exp) state throw)] 
       ; function calls
-      [(eq? (operator exp) 'funcall) (Mvalue classes currtype (returnvalue (callfunctionvalue classes currtype (functionname exp) (getfunctionclosure (functionname exp) (vars-list-all state) (values-list-all state)) (actualparams exp) state throw)) state throw)]
-      [(eq? (operator exp) 'throw) (throw state (Mvalue classes currtype (throwval exp) state throw))]
+      [(eq? (operator exp) 'funcall) (Mvalue this classes currtype (returnvalue (callfunctionvalue this classes currtype (functionname exp) (getfunctionclosure (functionname exp) (vars-list-all state) (values-list-all state)) (actualparams exp) state throw)) state throw)]
+      [(eq? (operator exp) 'throw) (throw state (Mvalue this classes currtype (throwval exp) state throw))]
       [else (error 'badexp "Bad expression")])))
 
 ;; Mstate takes an expression and modifies the state accordingly
 (define Mstate
-  (lambda (classes currtype exp state next break continue return throw)
+  (lambda (this classes currtype exp state next break continue return throw)
     (cond
       [(number? exp) state]
       [(eq? 'true exp) state]
@@ -102,40 +106,40 @@
       [(and (not (list? exp)) (var? exp (vars-list-all state))) state] ; checks if expression is a variable
       [(not (list? exp)) (error 'novar "Variable not declared")]
       [(null? exp) (next state)]
-      [(and (eq? (operator exp) 'var) (null? (Mvalue classes currtype (val exp) state throw)))
+      [(and (eq? (operator exp) 'var) (null? (Mvalue this classes currtype (val exp) state throw)))
             (next (declare (varname exp) state))] ; no value specified (only varname)
       [(eq? (operator exp) 'var) (next (assign (varname exp)
-            (Mvalue classes currtype (val exp) state throw) (declare (varname exp) state)))]
+            (Mvalue this classes currtype (val exp) state throw) (declare (varname exp) state)))]
       [(eq? (operator exp) '=) (next (assign (varname exp)
-            (Mvalue classes currtype (val exp) state throw) state))]
+            (Mvalue this classes currtype (val exp) state throw) state))]
       ; block
-      [(eq? (operator exp) 'begin) (Mstate classes currtype (firstexp (restof exp)) (addnewlayer state)
-            (blocknextlambda classes currtype (restof exp) next break continue return throw) (newblockbreaklambda break) (newblockcontinuelambda continue) return throw)]
+      [(eq? (operator exp) 'begin) (Mstate this classes currtype (firstexp (restof exp)) (addnewlayer state)
+            (blocknextlambda this classes currtype (restof exp) next break continue return throw) (newblockbreaklambda break) (newblockcontinuelambda continue) return throw)]
       ; if
-      [(and (eq? (operator exp) 'if) (Mvalue classes currtype (condition exp) state throw))
-       (Mstate classes currtype (then exp) (Mstate classes currtype (condition exp) state next break continue return throw) next break continue return throw)]
+      [(and (eq? (operator exp) 'if) (Mvalue this classes currtype (condition exp) state throw))
+       (Mstate this classes currtype (then exp) (Mstate this classes currtype (condition exp) state next break continue return throw) next break continue return throw)]
       [(and (eq? (operator exp) 'if) (null? (else-statement exp))) (next state)]
-      [(eq? (operator exp) 'if) (Mstate classes currtype (else-statement exp)
-            (Mstate classes currtype (condition exp) state next break continue return throw) next break continue return throw)]
+      [(eq? (operator exp) 'if) (Mstate this classes currtype (else-statement exp)
+            (Mstate this classes currtype (condition exp) state next break continue return throw) next break continue return throw)]
       ; while
-      [(eq? (operator exp) 'while)  (loop classes currtype exp state next (lambda (s) (next s))
-            (whilecontinuelambda classes currtype exp next break continue return throw) return throw)]
+      [(eq? (operator exp) 'while)  (loop this classes currtype exp state next (lambda (s) (next s))
+            (whilecontinuelambda this classes currtype exp next break continue return throw) return throw)]
       ;try
       [(eq? (operator exp) 'try)
-            (Mstate classes currtype (tryblock exp) state
-               (trynext classes currtype exp next break continue return throw)
-               (trybreak classes currtype exp break continue return throw)
-               (trycontinue classes currtype exp break continue return throw)
-               (tryreturn classes currtype exp next break continue return throw)
-               (trythrow classes currtype exp next break continue return throw))]
+            (Mstate this classes currtype (tryblock exp) state
+               (trynext this  classes currtype exp next break continue return throw)
+               (trybreak this classes currtype exp break continue return throw)
+               (trycontinue this classes currtype exp break continue return throw)
+               (tryreturn this classes currtype exp next break continue return throw)
+               (trythrow this classes currtype exp next break continue return throw))]
       ; break
       [(eq? (operator exp) 'break) (break (removelayer state))]
       ; continue
       [(eq? (operator exp) 'continue) (continue (removelayer state))]
       ; return
-      [(eq? (operator exp) 'return) (return (returnstate classes currtype (returnexp exp) state next break continue return throw))]
+      [(eq? (operator exp) 'return) (return (returnstate this classes currtype (returnexp exp) state next break continue return throw))]
       ; throw
-      [(eq? (operator exp) 'throw) (throw state (Mvalue classes currtype (throwval exp) state throw))]
+      [(eq? (operator exp) 'throw) (throw state (Mvalue this classes currtype (throwval exp) state throw))]
       ; values
       [(and (eq? (operator exp) '-) (null? (rightoperand exp))) state] ; unary minus
       [(eq? (operator exp) '-) state]
@@ -149,19 +153,24 @@
       [(eq? (operator exp) '>) state]
       [(eq? (operator exp) '<=) state]
       [(eq? (operator exp) '>=) state]
-      [(and (eq? (operator exp) '&&) (boolean? (Mvalue classes currtype (leftoperand exp) state throw))
-            (boolean? (Mvalue classes currtype (rightoperand exp) state throw)))
+      [(and (eq? (operator exp) '&&) (boolean? (Mvalue this classes currtype (leftoperand exp) state throw))
+            (boolean? (Mvalue this classes currtype (rightoperand exp) state throw)))
        state]
-      [(and (eq? (operator exp) '||) (boolean? (Mvalue classes currtype (leftoperand exp) state throw))
-            (boolean? (Mvalue classes currtype (rightoperand exp) state throw)))
+      [(and (eq? (operator exp) '||) (boolean? (Mvalue this classes currtype (leftoperand exp) state throw))
+            (boolean? (Mvalue this classes currtype (rightoperand exp) state throw)))
        state]
-      [(and (eq? (operator exp) '!) (boolean? (Mvalue classes currtype (leftoperand exp) state throw)))
+      [(and (eq? (operator exp) '!) (boolean? (Mvalue this classes currtype (leftoperand exp) state throw)))
        state]
       [(eq? 'function (operator exp)) (next (assign (functionname exp)
        (makefuncclosure currtype (formalparams exp) (funcbody exp)) (declare (functionname exp) state)))]
+      ; dot
+      [(eq? (operator exp) 'dot) (Mstate (Mvalue this classes (runtimetype exp) (leftoperand exp) state throw))]
       ; function calls
-      [(eq? (operator exp) 'funcall) (callfunctionstate classes currtype (functionname exp) (getfunctionclosure (functionname exp) (vars-list-all state) (values-list-all state)) (actualparams exp) state next throw)]
+      [(eq? (operator exp) 'funcall) (callfunctionstate this classes currtype (functionname exp) (getfunctionclosure (functionname exp) (vars-list-all state) (values-list-all state)) (actualparams exp) state next throw)]
       [else (error 'badstate "Bad state")])))
+
+;; getinstance
+;; 
 
 ;;;; Helper Functions--------------------------------------------------
 
@@ -256,10 +265,10 @@
   (lambda (tree state throw)
     (cond
       [(null? tree) state]
-      [(and (eq? (operator (firstexp tree)) 'var) (null? (Mvalue (error 'badcall "Invalid permissions") (error 'badcall "Invalid permissions") (val (firstexp tree)) state throw)))
+      [(and (eq? (operator (firstexp tree)) 'var) (null? (Mvalue (error 'badcall "Invalid permissions") (error 'badcall "Invalid permissions") (error 'badcall "Invalid permissions") (val (firstexp tree)) state throw)))
             (setclassvars (restof tree) (declare (varname (firstexp tree) state)) throw)] ; no value specified (only varname)
       [(eq? (operator (firstexp tree)) 'var) (setclassvars (restof tree) (assign (varname (firstexp tree))
-            (Mvalue (error 'badcall "Invalid permissions") (error 'badcall "Invalid permissions") (val (firstexp tree)) state throw) (declare (varname (firstexp tree)) state)) throw)]
+            (Mvalue (error 'badcall "Invalid permissions") (error 'badcall "Invalid permissions") (error 'badcall "Invalid permissions") (val (firstexp tree)) state throw) (declare (varname (firstexp tree)) state)) throw)]
       [(eq? 'function (operator (firstexp tree))) (setclassvars (restof tree) state throw)]
       [(eq? 'static-function (operator (firstexp tree))) (setclassvars (restof tree) state throw)]
       [else (error 'badexp "Invalid operation in class definition")])))
@@ -300,8 +309,8 @@
 
 ;; callfunctionvalue finds the output of a function; returns an error if no return value is given
 (define callfunctionvalue
-  (lambda (classes currtype funcname closure actualparams state throw)
-    (Mstate classes currtype (functionclosurebody closure) (bindparams classes currtype (closurefp closure) actualparams
+  (lambda (this classes currtype funcname closure actualparams state throw)
+    (Mstate this classes currtype (functionclosurebody closure) (bindparams this classes currtype (closurefp closure) actualparams
             (addnewlayer (functionclosurestate closure funcname state)) state throw)
      (lambda (s) (error 'noreturn "no return statement"))
      (newbreaklambda)
@@ -311,8 +320,8 @@
 
 ;; callfunctionstate finds the state resulting from a run of a function
 (define callfunctionstate
-  (lambda (classes currtype funcname closure actualparams state next throw)
-    (Mstate classes currtype (functionclosurebody closure) (bindparams classes currtype (closurefp closure) actualparams
+  (lambda (this classes currtype funcname closure actualparams state next throw)
+    (Mstate this classes currtype (functionclosurebody closure) (bindparams this classes currtype (closurefp closure) actualparams
             (addnewlayer (functionclosurestate closure funcname state)) state throw)
      (lambda (s) (next state))
      (newbreaklambda)
@@ -323,11 +332,11 @@
 ;; bindparams binds the values of the actual paramaters to the names of the formal parameters
 ;; NOTE: This method uses call-by-value
 (define bindparams
-  (lambda (classes currtype fp ap fstate state throw)
+  (lambda (this classes currtype fp ap fstate state throw)
     (cond
-      [(and (null? fp) (null? ap)) fstate]
+      [(and (null? fp) (null? ap)) (assign 'this this (declare 'this fstate))]
       [(or (null? fp) (null? ap)) (error 'mismatcharguments "The number of arguments expected did not match the number of arguments given")]
-      [else (bindparams classes currtype (restof fp) (restof ap) (assign (first-param fp) (Mvalue classes currtype (first-param ap) state throw) (declare (first-param fp) fstate)) state throw)])))
+      [else (bindparams classes currtype (restof fp) (restof ap) (assign (first-param fp) (Mvalue this classes currtype (first-param ap) state throw) (declare (first-param fp) fstate)) state throw)])))
 
 ;;;; Abstractions----------------------------------------------------------
 
@@ -415,12 +424,12 @@
 
 ;; newnextlambda returns a base lambda function for the next continuation
 (define newnextlambda
-  (lambda (classes currtype tree break continue return throw)
+  (lambda (this classes currtype tree break continue return throw)
     (lambda (s)
       (if (null? (restof tree))
                     (removelayer s)
-                    (Mstate classes currtype (firstexp (restof tree)) s
-                            (newnextlambda classes currtype (restof tree) break continue return throw) break continue return throw)))))
+                    (Mstate this classes currtype (firstexp (restof tree)) s
+                            (newnextlambda this classes currtype (restof tree) break continue return throw) break continue return throw)))))
 
 ;; newbreaklambda returns a base lambda function for the break continuation
 (define newbreaklambda
@@ -451,12 +460,12 @@
 ;; then it runs the next continuation from outside the block. Otherwise, its next line is the
 ;; next line of code inside the block
 (define blocknextlambda
-  (lambda (classes currtype exp next break continue return throw)
+  (lambda (this classes currtype exp next break continue return throw)
     (lambda (s)
       (if (null? (restof exp))
         (next (removelayer s))
-        (Mstate classes currtype (firstexp (restof exp)) s
-                (blocknextlambda classes currtype (restof exp) next break continue return throw) break continue return throw)))))
+        (Mstate this classes currtype (firstexp (restof exp)) s
+                (blocknextlambda this classes currtype (restof exp) next break continue return throw) break continue return throw)))))
 
 ;; newblockbreaklambda removes the current layer when we call break inside a block
 (define newblockbreaklambda
@@ -472,9 +481,9 @@
 
 ;; whilecontinuelambda is the base lambda function for when inside a while loop
 (define whilecontinuelambda
-  (lambda (classes currtype exp next break continue return throw)
+  (lambda (this classes currtype exp next break continue return throw)
     (lambda (s)
-      (Mstate classes currtype exp s next break continue return throw))))
+      (Mstate this classes currtype exp s next break continue return throw))))
 
 ;; removelayer removes the top layer from the state
 (define removelayer
@@ -495,57 +504,57 @@
 
 ;; trynext returns the lambda function used for the next continuation when inside a try block
 (define trynext
-  (lambda (classes currtype exp next break continue return throw)
+  (lambda (this classes currtype exp next break continue return throw)
     (lambda (s)
       (if (null? (finallyblock exp))
           (next s)
-          (Mstate classes currtype (finallyblock exp) s next break continue return throw)))))
+          (Mstate this classes currtype (finallyblock exp) s next break continue return throw)))))
 
 ;; trybreak returns the lambda function used for the break continuation when inside a try block
 (define trybreak
-  (lambda (classes currtype exp break continue return throw)
+  (lambda (this classes currtype exp break continue return throw)
     (lambda (s)
       (if (null? (finallyblock exp))
           (error 'noloop "Break cannot be run outside of a loop")
-          (Mstate classes currtype (finallyblock exp) s break break continue return throw)))))
+          (Mstate this classes currtype (finallyblock exp) s break break continue return throw)))))
 
 ;; trycontinue returns the lambda function used for the continue continuation when inside a try block
 (define trycontinue
-  (lambda (classes currtype exp break continue return throw)
+  (lambda (this classes currtype exp break continue return throw)
     (lambda (s)
        (if (null? (finallyblock exp))
            (error 'noloop "Continue cannot be run outside of a loop")
-           (Mstate classes currtype (finallyblock exp) s continue break continue return throw)))))
+           (Mstate this classes currtype (finallyblock exp) s continue break continue return throw)))))
 
 ;; tryreturn returns the lambda function used for the return continuation when inside a try block
 (define tryreturn
-  (lambda (classes currtype exp next break continue return throw)
+  (lambda (this classes currtype exp next break continue return throw)
     (lambda (v)
       (if (null? (finallyblock exp))
           v
-          (Mstate classes currtype (finallyblock exp) v return break continue return throw)))))
+          (Mstate this classes currtype (finallyblock exp) v return break continue return throw)))))
 
 ;; trythrow returns the lambda function used for the throw continuation when inside a try block
 (define trythrow
-  (lambda (classes currtype exp next break continue return throw)
+  (lambda (this classes currtype exp next break continue return throw)
     (lambda (s e)
       (cond
         [(and (null? (catchblock exp)) (null? (finallyblock exp)))
          (throw s e)]
         [(null? (catchblock exp))
-         (Mstate classes currtype (finallyblock exp) s
+         (Mstate this classes currtype (finallyblock exp) s
               (lambda (s1) (throw s1 e)) (lambda (s1) (throw s1 e)) (lambda (s1) (throw s1 e))
               (lambda (v) (throw s e)) throw)]
         [(null? (finallyblock exp))
-         (Mstate classes currtype (catchblock exp) (assign (catchvar exp) (Mvalue classes currtype e s throw)
-         (declare (catchvar exp) s)) (trynext classes currtype exp next break continue return throw)
-         (trybreak classes currtype exp break continue return throw) (trycontinue classes currtype exp break continue return throw)
-         (tryreturn classes currtype exp next break continue return throw) throw)]
-        [else (Mstate classes currtype (catchblock exp) (assign (catchvar exp) (Mvalue classes currtype e s throw)
-              (declare (catchvar exp) s)) (trynext classes currtype exp next break continue return throw)
-              (trybreak classes currtype exp break continue return throw) (trycontinue classes currtype exp break continue return throw)
-              (tryreturn classes currtype exp next break continue return throw)
-              (lambda (s1 e1) (Mstate classes currtype (finallyblock exp) s1
+         (Mstate this classes currtype (catchblock exp) (assign (catchvar exp) (Mvalue this classes currtype e s throw)
+         (declare (catchvar exp) s)) (trynext this  classes currtype exp next break continue return throw)
+         (trybreak this classes currtype exp break continue return throw) (trycontinue this classes currtype exp break continue return throw)
+         (tryreturn this  classes currtype exp next break continue return throw) throw)]
+        [else (Mstate this classes currtype (catchblock exp) (assign (catchvar exp) (Mvalue this classes currtype e s throw)
+              (declare (catchvar exp) s)) (trynext this  classes currtype exp next break continue return throw)
+              (trybreak this classes currtype exp break continue return throw) (trycontinue this classes currtype exp break continue return throw)
+              (tryreturn this  classes currtype exp next break continue return throw)
+              (lambda (s1 e1) (Mstate this classes currtype (finallyblock exp) s1
               (lambda (s2) (throw s2 e1)) (lambda (s2) (throw s2 e1)) (lambda (s2) (throw s2 e1))
               (lambda (v) (throw s1 e1)) throw)))]))))
 
@@ -580,9 +589,9 @@
 
 ;; loop runs each iteration of a while loop
 (define loop
-  (lambda (classes currtype exp state next break continue return throw)
-    (if (Mvalue classes currtype (condition exp) state throw)
-        (Mstate classes currtype (body exp) state (lambda (s) (Mstate classes currtype exp s next break continue return throw)) break continue return throw)
+  (lambda (this classes currtype exp state next break continue return throw)
+    (if (Mvalue this classes currtype (condition exp) state throw)
+        (Mstate this classes currtype (body exp) state (lambda (s) (Mstate this classes currtype exp s next break continue return throw)) break continue return throw)
         (next state))))
 
 ;; restof finds the rest of a given list
@@ -602,8 +611,8 @@
 
 ;; returnstate returns the state with an added return component
 (define returnstate
-  (lambda (classes currtype exp state next break continue return throw)
-    (cons state (cons (Mvalue classes currtype exp state throw) '()))))
+  (lambda (this classes currtype exp state next break continue return throw)
+    (cons state (cons (Mvalue this classes currtype exp state throw) '()))))
 
 ;; operator finds the operator of an expression
 (define operator
