@@ -28,10 +28,13 @@
 (define run
   (lambda (tree classes mainclassname state break continue return throw)
     (returnvalue (Mstate (makeinstanceclosure mainclassname (class-init-values-list (getclassclosure mainclassname (class-names-list classes) (class-closures-list classes)))) classes mainclassname
-                         (findmain (class-funcnames-list (getclassclosure mainclassname (class-names-list classes) (class-closures-list classes))) (class-funcclosures-list (getclassclosure mainclassname (class-names-list classes) (class-closures-list classes))))
-                         (functionclosurestate (getfunctionclosure 'main (class-funcnames-list (getclassclosure mainclassname (class-names-list classes) (class-closures-list classes))) (class-funcclosures-list (getclassclosure mainclassname (class-names-list classes) (class-closures-list classes))))
+                         (findmain (class-funcnames-list (getclassclosure mainclassname (class-names-list classes) (class-closures-list classes)))
+                                   (class-funcclosures-list (getclassclosure mainclassname (class-names-list classes) (class-closures-list classes))))
+                         (functionclosurestate (getfunctionclosure 'main (class-funcnames-list (getclassclosure mainclassname (class-names-list classes)
+                                                                         (class-closures-list classes))) (class-funcclosures-list (getclassclosure mainclassname (class-names-list classes) (class-closures-list classes))))
                                                'main (getclassclosure mainclassname (class-names-list classes) (class-closures-list classes)))
-                         (newnextlambda (makeinstanceclosure mainclassname (class-init-values-list (getclassclosure mainclassname (class-names-list classes) (class-closures-list classes)))) classes mainclassname tree break continue return throw) break continue return throw))))
+                         (newnextlambda (makeinstanceclosure mainclassname (class-init-values-list (getclassclosure mainclassname (class-names-list classes)
+                                                             (class-closures-list classes)))) classes mainclassname tree break continue return throw) break continue return throw))))
 
 ;;;; Mappings-------------------------------------------------------------
 
@@ -90,11 +93,14 @@
       ; new object
       [(eq? (operator exp) 'new) (makeinstanceclosure (runtimetype exp) (class-init-values-list (getclassclosure (runtimetype exp) (class-names-list classes) (class-closures-list classes))))]
       ; dot operator
-      [(and (eq? (operator exp) 'dot) (eq? (leftoperand exp) 'super)) (Mvalue (Mvalue this classes (superclass (getclassclosure (classname this) (class-names-list classes) (class-closures-list classes))) (leftoperand exp) state throw) classes
-                                                                      (superclass (getclassclosure (classname this) (class-names-list classes) (class-closures-list classes))) (rightoperand exp) state throw)]
+      [(and (eq? (operator exp) 'dot) (eq? (leftoperand exp) 'super))
+            (Mvalue (Mvalue this classes (superclass (getclassclosure (classname this)
+                            (class-names-list classes) (class-closures-list classes))) (leftoperand exp) state throw)
+                     classes (superclass (getclassclosure (classname this) (class-names-list classes) (class-closures-list classes))) (rightoperand exp) state throw)]
       [(eq? (operator exp) 'dot) (Mvalue (Mvalue this classes (runtimetype exp) (leftoperand exp) state throw) classes (runtimetype exp) (rightoperand exp) state throw)] 
       ; function calls
-      [(and (eq? (operator exp) 'funcall) (list? (leftoperand exp))) (Mvalue (Mvalue this classes (runtimetype exp) (leftoperand (leftoperand exp)) state throw) classes (runtimetype (leftoperand exp)) (makefuncall exp) state throw)]
+      [(and (eq? (operator exp) 'funcall) (list? (leftoperand exp))) (Mvalue (Mvalue this classes (runtimetype exp) (leftoperand (leftoperand exp)) state throw)
+                                                                             classes (runtimetype (leftoperand exp)) (makefuncall exp) state throw)]
       [(eq? (operator exp) 'funcall) (Mvalue this classes currtype (returnvalue (callfunctionvalue this classes currtype (functionname exp)
        (getfunctionclosure (functionname exp) (class-funcnames-list (getclassclosure (classname this) (class-names-list classes) (class-closures-list classes)))
        (class-funcclosures-list (getclassclosure (classname this) (class-names-list classes) (class-closures-list classes)))) (actualparams exp) state throw)) state throw)]
@@ -169,13 +175,16 @@
       [(eq? 'function (operator exp)) (next (assign (functionname exp)
        (makefuncclosure currtype (formalparams exp) (funcbody exp)) (declare (functionname exp) state)))]
       ; dot operator
-      [(and (eq? (operator exp) 'dot) (eq? (leftoperand exp) 'super)) (Mstate (Mvalue this classes (superclass (getclassclosure (classname this) (class-names-list classes) (class-closures-list classes))) (leftoperand exp) state throw) classes
-                                                                      (superclass (getclassclosure (classname this) (class-names-list classes) (class-closures-list classes))) (rightoperand exp) state next break continue return throw)]
+      [(and (eq? (operator exp) 'dot) (eq? (leftoperand exp) 'super))
+            (Mstate (Mvalue this classes (superclass (getclassclosure (classname this) (class-names-list classes) (class-closures-list classes))) (leftoperand exp) state throw) classes
+                    (superclass (getclassclosure (classname this) (class-names-list classes) (class-closures-list classes))) (rightoperand exp) state next break continue return throw)]
       [(eq? (operator exp) 'dot) (Mstate (Mvalue this classes (runtimetype exp) (leftoperand exp) state throw) classes (runtimetype exp) (rightoperand exp) state next break continue return throw)]
       ; function calls
-      [(and (eq? (operator exp) 'funcall) (list? (leftoperand exp))) (Mstate (Mvalue this classes (runtimetype exp) (leftoperand (leftoperand exp)) state throw) classes (runtimetype (leftoperand exp)) (makefuncall exp) state next break continue return throw)]
+      [(and (eq? (operator exp) 'funcall) (list? (leftoperand exp)))
+            (Mstate (Mvalue this classes (runtimetype exp) (leftoperand (leftoperand exp)) state throw) classes (runtimetype (leftoperand exp)) (makefuncall exp) state next break continue return throw)]
       [(eq? (operator exp) 'funcall) (callfunctionstate this classes currtype (functionname exp)  (getfunctionclosure (functionname exp) (class-funcnames-list
-       (getclassclosure (classname this) (class-names-list classes) (class-closures-list classes))) (class-funcclosures-list (getclassclosure (classname this) (class-names-list classes) (class-closures-list classes)))) (actualparams exp) state next throw)]
+       (getclassclosure (classname this) (class-names-list classes) (class-closures-list classes)))
+                        (class-funcclosures-list (getclassclosure (classname this) (class-names-list classes) (class-closures-list classes)))) (actualparams exp) state next throw)]
       [else (error 'badstate "Bad state")])))
 
 ;;;; Helper Functions--------------------------------------------------
@@ -265,7 +274,8 @@
       [(null? tree) state]
       [(eq? 'class (operator (firstexp tree ))) (setclasses (restof tree) (assign (classname (firstexp tree))
        (makeclassclosure (superclass (firstexp tree)) (instancevarslist (firstexp tree) state throw) (instanceinitvalslist (firstexp tree) state throw)
-                         (funcnameslist (classname (firstexp tree)) (firstexp tree) state throw) (funcclosureslist (classname (firstexp tree)) (firstexp tree) state throw)) (declare (classname (firstexp tree)) state)) throw)]
+                         (funcnameslist (classname (firstexp tree)) (firstexp tree) state throw)
+                         (funcclosureslist (classname (firstexp tree)) (firstexp tree) state throw)) (declare (classname (firstexp tree)) state)) throw)]
       [else (error 'badexp "Invalid operation when defining classes")])))
 
 ;; setclassvars declares all class variables
@@ -273,10 +283,12 @@
   (lambda (tree state throw)
     (cond
       [(null? tree) state]
-      [(and (eq? (operator (firstexp tree)) 'var) (null? (Mvalue (lambda () (error 'badcall "Invalid permissions")) (lambda () (error 'badcall "Invalid permissions")) (lambda () (error 'badcall "Invalid permissions")) (val (firstexp tree)) state throw)))
+      [(and (eq? (operator (firstexp tree)) 'var) (null? (Mvalue (lambda () (error 'badcall "Invalid permissions"))
+                 (lambda () (error 'badcall "Invalid permissions")) (lambda () (error 'badcall "Invalid permissions")) (val (firstexp tree)) state throw)))
             (setclassvars (restof tree) (declare (varname (firstexp tree)) state) throw)] ; no value specified (only varname)
       [(eq? (operator (firstexp tree)) 'var) (setclassvars (restof tree) (assign (varname (firstexp tree))
-            (Mvalue (lambda () (error 'badcall "Invalid permissions")) (lambda () (error 'badcall "Invalid permissions")) (lambda () (error 'badcall "Invalid permissions")) (val (firstexp tree)) state throw) (declare (varname (firstexp tree)) state)) throw)]
+            (Mvalue (lambda () (error 'badcall "Invalid permissions")) (lambda () (error 'badcall "Invalid permissions"))
+                    (lambda () (error 'badcall "Invalid permissions")) (val (firstexp tree)) state throw) (declare (varname (firstexp tree)) state)) throw)]
       [(eq? 'function (operator (firstexp tree))) (setclassvars (restof tree) state throw)]
       [(eq? 'static-function (operator (firstexp tree))) (setclassvars (restof tree) state throw)]
       [else (error 'badexp "Invalid operation in class definition")])))
@@ -609,7 +621,8 @@
 (define loop
   (lambda (this classes currtype exp state next break continue return throw)
     (if (Mvalue this classes currtype (condition exp) state throw)
-        (Mstate this classes currtype (body exp) state (lambda (s) (Mstate this classes currtype exp s next break continue return throw)) break continue return throw)
+        (Mstate this classes currtype (body exp) state
+                (lambda (s) (Mstate this classes currtype exp s next break continue return throw)) break continue return throw)
         (next state))))
 
 ;; restof finds the rest of a given list
